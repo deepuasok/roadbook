@@ -2401,7 +2401,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 // app.js — main entry: render lanes/cards, wire top controls, keyboard nav
 (function () {
   const ROW_H = 34;
-  const NARROW_DAYS = 90; // below ~3 months, hide meta so title gets the room
+  const NARROW_DAYS = 20; // below ~3 weeks, hide meta — anything wider still shows the end date
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -2544,8 +2544,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   }
 
   function renderMeta(item) {
+    const dates = window.Roadbook.dates;
+    const spanDays = dates ? dates.diffDays(item.startDate, item.endDate) + 1 : 999;
     const parts = [];
-    if (item.complete && item.complete > 0) parts.push(`<span class="pct">${item.complete}%</span>`);
+    // Only show % on wider chips so narrower ones have room for title + date
+    if (spanDays >= 90 && item.complete && item.complete > 0) {
+      parts.push(`<span class="pct">${item.complete}%</span>`);
+    }
     if (item.endDate) parts.push(escapeHtml(fmtDate(item.endDate)));
     return parts.join(" · ");
   }
