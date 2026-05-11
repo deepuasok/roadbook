@@ -39,22 +39,6 @@
   </div>
 
   <div class="toolbar">
-    <div class="legend">
-      <div class="legend-row">
-        <span class="label">Status</span>
-        <span><span class="dot dot-planned"></span>Planned</span>
-        <span><span class="dot dot-funded"></span>Funded</span>
-        <span><span class="dot dot-soon"></span>Coming Soon</span>
-        <span><span class="dot dot-pending"></span>Pending</span>
-        <span><span class="dot dot-conditional"></span>If Capacity</span>
-      </div>
-      <div class="legend-row">
-        <span class="label">Type</span>
-        <span><span class="stripe stripe-build"></span>Build</span>
-        <span><span class="stripe stripe-data"></span>Data</span>
-        <span><span class="stripe stripe-polish"></span>Polish</span>
-      </div>
-    </div>
     <div class="toolbar-actions">
       <button class="icon-btn" id="importBtn" title="Import roadmap from JSON" aria-label="Import JSON">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V2"/><path d="M5 8l3 3 3-3"/><path d="M3 13h10"/></svg>
@@ -66,35 +50,42 @@
       </button>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
       <span class="divider" aria-hidden="true"></span>
-      <button class="icon-btn" id="shareLink" title="Copy shareable link" aria-label="Copy share link">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9a3 3 0 014.2 0l1.4-1.4a3 3 0 00-4.2-4.2L7 4.8"/><path d="M9 7a3 3 0 01-4.2 0L3.4 8.4a3 3 0 004.2 4.2L9 11.2"/></svg>
-        Link
-      </button>
-      <button class="icon-btn" id="sharePng" title="Copy roadmap PNG" aria-label="Copy PNG">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.2"/><path d="M3 12l3.5-3.5L9 11l2-2 3 3"/></svg>
-        PNG
-      </button>
-      <button class="icon-btn" id="shareSvg" title="Download SVG" aria-label="Download SVG">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h10"/><path d="M5 9l3 3 3-3"/><path d="M8 3v9"/></svg>
-        SVG
-      </button>
+      <div class="share-wrap">
+        <button class="icon-btn" id="shareBtn" title="Share roadmap" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V2"/><path d="M5 5l3-3 3 3"/><path d="M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3"/></svg>
+          Share
+          <svg class="caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5l2.5 2.5L8.5 5"/></svg>
+        </button>
+        <div class="share-menu" id="shareMenu" role="menu" hidden>
+          <button class="share-menu-item" id="shareLink" role="menuitem">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9a3 3 0 014.2 0l1.4-1.4a3 3 0 00-4.2-4.2L7 4.8"/><path d="M9 7a3 3 0 01-4.2 0L3.4 8.4a3 3 0 004.2 4.2L9 11.2"/></svg>
+            <span class="smi-label">Copy link</span>
+            <span class="smi-hint">Encodes the roadmap in a URL</span>
+          </button>
+          <button class="share-menu-item" id="sharePng" role="menuitem">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.2"/><path d="M3 12l3.5-3.5L9 11l2-2 3 3"/></svg>
+            <span class="smi-label">Copy PNG</span>
+            <span class="smi-hint">Screenshot to clipboard</span>
+          </button>
+          <button class="share-menu-item" id="shareSvg" role="menuitem">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h10"/><path d="M5 9l3 3 3-3"/><path d="M8 3v9"/></svg>
+            <span class="smi-label">Download SVG</span>
+            <span class="smi-hint">Vector for slide decks</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="axis">
     <div class="year" id="axisYear">2026</div>
-    <div class="m"><span class="m-q">Q1</span><span class="m-name">Jan</span></div>
-    <div class="m"><span class="m-name">Feb</span></div>
-    <div class="m"><span class="m-name">Mar</span></div>
-    <div class="m"><span class="m-q">Q2</span><span class="m-name">Apr</span></div>
-    <div class="m"><span class="m-name">May</span></div>
-    <div class="m"><span class="m-name">Jun</span></div>
-    <div class="m"><span class="m-q">Q3</span><span class="m-name">Jul</span></div>
-    <div class="m"><span class="m-name">Aug</span></div>
-    <div class="m"><span class="m-name">Sep</span></div>
-    <div class="m"><span class="m-q">Q4</span><span class="m-name">Oct</span></div>
-    <div class="m"><span class="m-name">Nov</span></div>
-    <div class="m"><span class="m-name">Dec</span></div>
+    <div class="months">
+      <div class="q">Q1</div><div class="q">Q2</div><div class="q">Q3</div><div class="q">Q4</div>
+      <div class="m">Jan</div><div class="m">Feb</div><div class="m">Mar</div>
+      <div class="m">Apr</div><div class="m">May</div><div class="m">Jun</div>
+      <div class="m">Jul</div><div class="m">Aug</div><div class="m">Sep</div>
+      <div class="m">Oct</div><div class="m">Nov</div><div class="m">Dec</div>
+    </div>
   </div>
 
   <div id="lanes" role="list" aria-label="Swim lanes"></div>

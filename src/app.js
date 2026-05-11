@@ -1,7 +1,8 @@
 // app.js — main entry: render lanes/cards, wire top controls, keyboard nav
 (function () {
   const ROW_H = 34;
-  const NARROW_DAYS = 20; // below ~3 weeks, hide meta — anything wider still shows the end date
+  const NARROW_DAYS = 20;  // below ~3 weeks: hide meta entirely
+  const MEDIUM_DAYS = 60;  // below ~2 months: compact mode (drop status dot)
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -127,6 +128,7 @@
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
     if (spanDays < NARROW_DAYS) card.dataset.narrow = "true";
+    if (spanDays < MEDIUM_DAYS) card.dataset.compact = "true";
     card.setAttribute("aria-label",
       `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.innerHTML = `
@@ -168,6 +170,8 @@
     card.style.setProperty("--complete", item.complete || 0);
     if (spanDays < NARROW_DAYS) card.dataset.narrow = "true";
     else delete card.dataset.narrow;
+    if (spanDays < MEDIUM_DAYS) card.dataset.compact = "true";
+    else delete card.dataset.compact;
     card.setAttribute("aria-label",
       `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.querySelector(".title").textContent = item.title;
@@ -455,9 +459,32 @@
     document.getElementById("exportBtn").addEventListener("click", () => window.Roadbook.share.exportJson());
     document.getElementById("importBtn").addEventListener("click", () => window.Roadbook.share.triggerImport());
     document.getElementById("importFile").addEventListener("change", (e) => window.Roadbook.share.handleImport(e));
-    document.getElementById("shareLink").addEventListener("click", () => window.Roadbook.share.copyShareLink());
-    document.getElementById("sharePng").addEventListener("click", () => window.Roadbook.share.copyPng());
-    document.getElementById("shareSvg").addEventListener("click", () => window.Roadbook.share.downloadSvg());
+
+    // Share dropdown — toggles a popover with link/png/svg
+    const shareBtn = document.getElementById("shareBtn");
+    const shareMenu = document.getElementById("shareMenu");
+    function closeShareMenu() {
+      shareMenu.hidden = true;
+      shareBtn.setAttribute("aria-expanded", "false");
+    }
+    shareBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const willOpen = shareMenu.hidden;
+      shareMenu.hidden = !willOpen;
+      shareBtn.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      if (willOpen) {
+        const onOutside = (ev) => {
+          if (!shareMenu.contains(ev.target) && ev.target !== shareBtn && !shareBtn.contains(ev.target)) {
+            closeShareMenu();
+            document.removeEventListener("click", onOutside);
+          }
+        };
+        setTimeout(() => document.addEventListener("click", onOutside), 0);
+      }
+    });
+    document.getElementById("shareLink").addEventListener("click", () => { closeShareMenu(); window.Roadbook.share.copyShareLink(); });
+    document.getElementById("sharePng").addEventListener("click", () => { closeShareMenu(); window.Roadbook.share.copyPng(); });
+    document.getElementById("shareSvg").addEventListener("click", () => { closeShareMenu(); window.Roadbook.share.downloadSvg(); });
 
     const accentInput = document.getElementById("accentInput");
     document.getElementById("accentBtn").addEventListener("click", () => accentInput.click());
@@ -478,6 +505,11 @@
         if (window.Roadbook.modal.isOpen()) window.Roadbook.modal.close();
         const tpl = document.getElementById("templateOverlay");
         if (tpl.classList.contains("show")) window.Roadbook.templates.close();
+        const sm = document.getElementById("shareMenu");
+        if (sm && !sm.hidden) {
+          sm.hidden = true;
+          document.getElementById("shareBtn").setAttribute("aria-expanded", "false");
+        }
       }
       const cmd = e.metaKey || e.ctrlKey;
       if (cmd && e.key.toLowerCase() === "z") {
