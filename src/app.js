@@ -1,6 +1,7 @@
 // app.js — main entry: render lanes/cards, wire top controls, keyboard nav
 (function () {
   const ROW_H = 34;
+  const COLS = 12; // months
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -111,7 +112,7 @@
     card.style.setProperty("--span", item.span);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, Q${item.start}, span ${item.span}`);
+    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
     card.innerHTML = `
       <div class="fill"></div>
       <span class="dot" aria-hidden="true"></span>
@@ -143,7 +144,7 @@
     card.style.setProperty("--span", item.span);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, Q${item.start}, span ${item.span}`);
+    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
   }
@@ -175,7 +176,7 @@
       window.Roadbook.state.currentYear().items.push({
         id, laneId,
         title: "New item",
-        start: 1, span: 1, row: r,
+        start: 1, span: 3, row: r, // default to one quarter (3 months)
         status: "planned",
         type: "other",
         due: "",
@@ -304,7 +305,7 @@
 
     if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       const delta = e.key === "ArrowRight" ? 1 : -1;
-      const newSpan = Math.max(1, Math.min(5 - item.start, item.span + delta));
+      const newSpan = Math.max(1, Math.min(COLS + 1 - item.start, item.span + delta));
       if (newSpan !== item.span) {
         window.Roadbook.state.commit(() => { item.span = newSpan; });
         updateCardDom(item);
@@ -314,7 +315,7 @@
 
     let { start, row, laneId } = item;
     if (e.key === "ArrowLeft") start = Math.max(1, start - 1);
-    if (e.key === "ArrowRight") start = Math.min(5 - item.span, start + 1);
+    if (e.key === "ArrowRight") start = Math.min(COLS + 1 - item.span, start + 1);
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       const y = window.Roadbook.state.currentYear();
       const idx = y.lanes.findIndex((l) => l.id === laneId);

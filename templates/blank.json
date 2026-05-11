@@ -1,10 +1,11 @@
 {
-  "roadbookVersion": 1,
+  "roadbookVersion": 2,
   "title": "Roadbook",
   "eyebrow": "Product · 2026",
   "activeYear": "2026",
   "data": {
     "2026": {
+      "granularity": "month",
       "lanes": [
         { "id": "now",   "name": "Now",   "description": "Shipping this quarter.",  "color": "sage" },
         { "id": "next",  "name": "Next",  "description": "Up next, scoped.",         "color": "sky" },
@@ -12,6 +13,6 @@
       ],
       "items": []
     },
-    "2027": { "lanes": [], "items": [] }
+    "2027": { "granularity": "month", "lanes": [], "items": [] }
   }
 }

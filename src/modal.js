@@ -3,6 +3,27 @@
   let editingId = null;
   let prevFocus = null;
 
+  function setChipGroup(groupId, value) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.querySelectorAll(".chip").forEach((chip) => {
+      const active = chip.dataset.value === value;
+      chip.classList.toggle("active", active);
+      chip.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    group.dataset.value = value;
+  }
+
+  function getChipGroupValue(groupId, fallback) {
+    const group = document.getElementById(groupId);
+    return (group && group.dataset.value) || fallback;
+  }
+
+  function paintSliderFill(value) {
+    const slider = document.getElementById("fComplete");
+    if (slider) slider.style.setProperty("--slider-fill", value + "%");
+  }
+
   function open(itemId) {
     const item = window.Roadbook.state.findItem(itemId);
     if (!item) return;
@@ -11,11 +32,12 @@
 
     document.getElementById("fTitle").value = item.title;
     document.getElementById("fDue").value = item.due || "";
-    document.getElementById("fStatus").value = item.status || "planned";
-    document.getElementById("fType").value = item.type || "other";
+    setChipGroup("fStatusGroup", item.status || "planned");
+    setChipGroup("fTypeGroup", item.type || "other");
     const complete = item.complete || 0;
     document.getElementById("fComplete").value = complete;
     document.getElementById("fCompleteVal").textContent = complete + "%";
+    paintSliderFill(complete);
     document.getElementById("modalTitle").textContent = `Edit · ${item.title}`;
     document.getElementById("modalOverlay").classList.add("show");
     setTimeout(() => document.getElementById("fTitle").focus(), 40);
@@ -37,8 +59,8 @@
     const next = {
       title: document.getElementById("fTitle").value.trim() || item.title,
       due: document.getElementById("fDue").value,
-      status: document.getElementById("fStatus").value,
-      type: document.getElementById("fType").value,
+      status: getChipGroupValue("fStatusGroup", "planned"),
+      type: getChipGroupValue("fTypeGroup", "other"),
       complete: parseInt(document.getElementById("fComplete").value, 10) || 0
     };
     const changed = Object.keys(next).some((k) => next[k] !== item[k]);
@@ -98,11 +120,25 @@
       if (e.target.id === "modalOverlay") close();
     });
     document.getElementById("fComplete").addEventListener("input", (e) => {
-      document.getElementById("fCompleteVal").textContent = e.target.value + "%";
+      const v = e.target.value;
+      document.getElementById("fCompleteVal").textContent = v + "%";
+      paintSliderFill(v);
     });
     document.getElementById("fTitle").addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); save(); }
     });
+
+    // Chip-group click handlers
+    ["fStatusGroup", "fTypeGroup"].forEach((groupId) => {
+      const group = document.getElementById(groupId);
+      if (!group) return;
+      group.addEventListener("click", (e) => {
+        const chip = e.target.closest(".chip");
+        if (!chip) return;
+        setChipGroup(groupId, chip.dataset.value);
+      });
+    });
+
     document.addEventListener("keydown", trapFocus);
   }
 

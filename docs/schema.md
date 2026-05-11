@@ -6,7 +6,7 @@ A Roadbook is a single JSON document. Export with the **Export** button; import 
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `roadbookVersion` | number | yes | Schema version. Currently `1`. |
+| `roadbookVersion` | number | yes | Schema version. Currently `2` (months). v1 files using quarters auto-migrate on import. |
 | `title` | string | yes | Roadmap title (header). Max 120 chars. |
 | `eyebrow` | string | no | Subtitle / kicker above the title. Max 80 chars. |
 | `activeYear` | `"2026"` \| `"2027"` | yes | Which year tab is selected on load. |
@@ -17,6 +17,7 @@ A Roadbook is a single JSON document. Export with the **Export** button; import 
 
 ```ts
 {
+  granularity: "month",  // optional; defaults to "month" — legacy "quarter" data migrates on load
   lanes: Lane[],
   items: Item[]
 }
@@ -38,8 +39,8 @@ A Roadbook is a single JSON document. Export with the **Export** button; import 
 | `id` | string | yes | Unique within the year. |
 | `laneId` | string | yes | Must match a `Lane.id` in the same year. |
 | `title` | string | yes | Card label. |
-| `start` | 1–4 | yes | Quarter the item starts in. |
-| `span` | 1–4 | yes | Number of quarters the item covers. `start + span - 1` ≤ 4. |
+| `start` | 1–12 | yes | Month the item starts in (1 = Jan). |
+| `span` | 1–12 | yes | Number of months the item covers. `start + span - 1` ≤ 12. |
 | `row` | int ≥ 0 | yes | Vertical position within the lane (0 = top). Multiple items can occupy the same lane on different rows. |
 | `status` | enum | yes | `planned`, `funded`, `soon`, `pending`, `conditional`. |
 | `type` | enum | yes | `other`, `build`, `data`, `polish`. Drives the left color stripe. |

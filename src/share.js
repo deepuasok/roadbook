@@ -57,14 +57,16 @@
     const s = window.Roadbook.state.get();
     const year = s.activeYear;
     const data = s.data[year];
-    const W = 1200;
+    const W = 1280;
     const ROW_H = 34;
     const LANE_HEAD_W = 140;
     const LANE_PAD = 16;
     const GRID_X = LANE_HEAD_W + LANE_PAD + 12;
     const GRID_W = W - GRID_X - LANE_PAD;
-    const QUARTER_W = GRID_W / 4;
+    const COLS = 12;
+    const MONTH_W = GRID_W / COLS;
     const HEADER_H = 96;
+    const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
     const styleVar = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
     const text = styleVar("--text") || "#0A0A0A";
@@ -107,12 +109,18 @@
     out.push(`<text x="${LANE_PAD}" y="32" font-size="11" font-weight="600" fill="${textMuted}" letter-spacing="0.8">${escapeXml(String(s.eyebrow || "").toUpperCase())}</text>`);
     out.push(`<text x="${LANE_PAD}" y="62" font-size="26" font-weight="700" fill="${text}" letter-spacing="-0.5">${escapeXml(s.title || "Roadbook")}</text>`);
 
-    // Year axis
+    // Year axis with quarter group labels + month labels
     const axisY = HEADER_H + 12;
     out.push(`<text x="${LANE_PAD}" y="${axisY}" font-size="12" font-weight="600" fill="${text}">${escapeXml(year)}</text>`);
-    for (let q = 1; q <= 4; q++) {
-      const cx = GRID_X + (q - 0.5) * QUARTER_W;
-      out.push(`<text x="${cx}" y="${axisY}" font-size="10" font-weight="600" fill="${textMuted}" text-anchor="middle" letter-spacing="1">Q${q}</text>`);
+    // Quarter labels above
+    for (let q = 0; q < 4; q++) {
+      const cx = GRID_X + (q * 3 + 0.5) * MONTH_W;
+      out.push(`<text x="${cx}" y="${axisY - 12}" font-size="9" font-weight="700" fill="${textMuted}" letter-spacing="1.2">Q${q + 1}</text>`);
+    }
+    // Month names
+    for (let m = 0; m < COLS; m++) {
+      const cx = GRID_X + (m + 0.5) * MONTH_W;
+      out.push(`<text x="${cx}" y="${axisY}" font-size="10" font-weight="600" fill="${textDim}" text-anchor="middle">${MONTH_NAMES[m]}</text>`);
     }
     out.push(`<line x1="${LANE_PAD}" y1="${axisY + 6}" x2="${W - LANE_PAD}" y2="${axisY + 6}" stroke="${border}" stroke-width="1"/>`);
 
@@ -133,16 +141,17 @@
       if (lane.description) {
         out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 44}" font-size="11" fill="${textDim}">${escapeXml(lane.description)}</text>`);
       }
-      // Quarter gridlines for this lane
-      for (let q = 1; q <= 3; q++) {
-        const x = GRID_X + q * QUARTER_W;
-        out.push(`<line x1="${x}" y1="${cursorY + 8}" x2="${x}" y2="${cursorY + lh - 8}" stroke="${border}" stroke-width="0.5" stroke-dasharray="2 3" opacity="0.5"/>`);
+      // Month gridlines for this lane (light) and quarter dividers (stronger)
+      for (let m = 1; m < COLS; m++) {
+        const x = GRID_X + m * MONTH_W;
+        const isQ = (m % 3 === 0);
+        out.push(`<line x1="${x}" y1="${cursorY + 8}" x2="${x}" y2="${cursorY + lh - 8}" stroke="${isQ ? styleVar("--border-strong") || "#D1D5DB" : border}" stroke-width="${isQ ? 0.7 : 0.4}" opacity="${isQ ? 0.7 : 0.45}"/>`);
       }
 
       // Items
       data.items.filter((it) => it.laneId === lane.id).forEach((it) => {
-        const x = GRID_X + (it.start - 1) * QUARTER_W;
-        const w = it.span * QUARTER_W - 6;
+        const x = GRID_X + (it.start - 1) * MONTH_W;
+        const w = it.span * MONTH_W - 6;
         const y = cursorY + 16 + it.row * ROW_H;
         const h = 30;
         // Card body

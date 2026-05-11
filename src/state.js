@@ -7,7 +7,7 @@
   const META_KEY = `${PREFIX}-meta`;
   const YEAR_KEY = `${PREFIX}-active-year`;
   const LAYOUT_KEY = (y) => `${PREFIX}-layout-${y}`;
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2; // v2 = month granularity (1-12)
   const HISTORY_LIMIT = 50;
 
   const PALETTE = [
@@ -81,7 +81,7 @@
   }
 
   function normalizeYear(y) {
-    const out = { lanes: [], items: [] };
+    const out = { granularity: "month", lanes: [], items: [] };
     if (y && Array.isArray(y.lanes)) {
       out.lanes = y.lanes.map((l, i) => ({
         id: l.id || `lane-${i}-${Math.random().toString(36).slice(2, 7)}`,
@@ -90,19 +90,38 @@
         color: PALETTE.includes(l.color) ? l.color : PALETTE[i % PALETTE.length]
       }));
     }
+    // Decide whether to migrate quarter → month units.
+    // Trigger: granularity missing/quarter, OR all items fit start≤4 && span≤4 (legacy v1 data).
+    const explicitlyQuarter = y && (y.granularity === "quarter" || y.granularity === undefined);
+    const looksLikeQuarterData = y && Array.isArray(y.items) && y.items.length > 0
+      && y.items.every((it) => {
+        const s = parseInt(it.start, 10) || 1;
+        const sp = parseInt(it.span, 10) || 1;
+        return s >= 1 && s <= 4 && sp >= 1 && sp <= 4 && s + sp - 1 <= 4;
+      });
+    const migrate = y && y.granularity !== "month" && (explicitlyQuarter || looksLikeQuarterData);
+
     if (y && Array.isArray(y.items)) {
-      out.items = y.items.map((it, i) => ({
-        id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
-        laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
-        title: String(it.title || "Untitled"),
-        start: clamp(parseInt(it.start, 10) || 1, 1, 4),
-        span: clamp(parseInt(it.span, 10) || 1, 1, 4),
-        row: Math.max(0, parseInt(it.row, 10) || 0),
-        status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
-        type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
-        due: typeof it.due === "string" ? it.due : "",
-        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
-      }));
+      out.items = y.items.map((it, i) => {
+        let start = parseInt(it.start, 10) || 1;
+        let span = parseInt(it.span, 10) || 1;
+        if (migrate) {
+          start = (start - 1) * 3 + 1;
+          span = span * 3;
+        }
+        return {
+          id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
+          laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
+          title: String(it.title || "Untitled"),
+          start: clamp(start, 1, 12),
+          span: clamp(span, 1, 12),
+          row: Math.max(0, parseInt(it.row, 10) || 0),
+          status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
+          type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
+          due: typeof it.due === "string" ? it.due : "",
+          complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
+        };
+      });
     }
     return out;
   }

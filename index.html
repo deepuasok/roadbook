@@ -139,7 +139,15 @@ html, body {
   transition: background-color 200ms ease, color 200ms ease;
 }
 
-.page { max-width: 1200px; margin: 0 auto; padding: 24px 32px 32px; }
+/* Scale up the whole canvas on desktop for readability */
+@media (min-width: 1024px) {
+  body { zoom: 1.15; }
+}
+@media (min-width: 1400px) {
+  body { zoom: 1.25; }
+}
+
+.page { max-width: 1280px; margin: 0 auto; padding: 24px 32px 32px; }
 
 /* ---------- 3. Header ---------- */
 .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 16px; }
@@ -240,16 +248,36 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 /* ---------- 5. Axis ---------- */
 .axis {
   display: grid;
-  grid-template-columns: 140px repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: 140px repeat(12, 1fr);
+  gap: 0;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
-.axis .year { font-size: 12px; font-weight: 600; align-self: end; }
-.axis .q {
-  font-size: 10px; font-weight: 600; letter-spacing: 1px;
-  color: var(--text-muted); text-transform: uppercase;
+.axis .year { font-size: 12px; font-weight: 600; align-self: end; padding-right: 12px; }
+.axis .m {
+  display: flex; flex-direction: column;
   align-self: end;
+  padding-left: 4px;
+  position: relative;
+  min-height: 28px;
+  justify-content: flex-end;
+}
+.axis .m-q {
+  font-size: 9px; font-weight: 700; letter-spacing: 1.2px;
+  color: var(--text-muted); text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.axis .m-name {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+/* Quarter divider on the axis cells where a new quarter begins */
+.axis .m:nth-child(2),
+.axis .m:nth-child(5),
+.axis .m:nth-child(8),
+.axis .m:nth-child(11) {
+  border-left: 1px solid var(--border);
+  padding-left: 6px;
 }
 
 /* ---------- 6. Lanes ---------- */
@@ -347,11 +375,14 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   content: "";
   position: absolute; inset: 0;
   background-image:
-    linear-gradient(to right, transparent 0, transparent calc(25% - 1px), var(--border) calc(25% - 1px), var(--border) 25%, transparent 25%),
-    linear-gradient(to right, transparent 0, transparent calc(50% - 1px), var(--border) calc(50% - 1px), var(--border) 50%, transparent 50%),
-    linear-gradient(to right, transparent 0, transparent calc(75% - 1px), var(--border) calc(75% - 1px), var(--border) 75%, transparent 75%);
+    /* Quarter dividers — stronger */
+    linear-gradient(to right, transparent calc(25% - 1px), var(--border-strong) calc(25% - 1px), var(--border-strong) 25%, transparent 25%, transparent calc(50% - 1px), var(--border-strong) calc(50% - 1px), var(--border-strong) 50%, transparent 50%, transparent calc(75% - 1px), var(--border-strong) calc(75% - 1px), var(--border-strong) 75%, transparent 75%),
+    /* Month dividers — subtle, every 1/12 (line at right of each cell, so 11 visible) */
+    linear-gradient(to right, transparent calc(100% - 1px), var(--border) calc(100% - 1px));
+  background-size: 100% 100%, calc(100% / 12) 100%;
+  background-repeat: no-repeat, repeat;
   pointer-events: none;
-  opacity: 0.4;
+  opacity: 0.55;
 }
 
 .ghost {
@@ -370,8 +401,8 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 /* ---------- 7. Cards ---------- */
 .card {
   position: absolute;
-  left: calc((var(--start, 1) - 1) * 25%);
-  width: calc(var(--span, 1) * 25% - var(--row-gap));
+  left: calc((var(--start, 1) - 1) * (100% / 12));
+  width: calc(var(--span, 1) * (100% / 12) - var(--row-gap));
   top: calc(var(--row, 0) * var(--row-h));
   height: var(--pill-h);
   background-color: var(--pill-bg);
@@ -494,20 +525,122 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   background-color: var(--modal-overlay);
   display: none; align-items: center; justify-content: center;
   z-index: 100;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
+  animation: roadbook-overlay-fade 140ms ease;
+}
+@keyframes roadbook-overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .modal-overlay.show { display: flex; }
 .modal {
   background-color: var(--modal-bg);
   color: var(--text);
   border-radius: 14px;
-  width: 420px; max-width: calc(100vw - 32px);
-  padding: 22px 22px 18px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  width: 460px; max-width: calc(100vw - 32px);
+  padding: 24px 24px 20px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.28);
   border: 1px solid var(--border);
+  animation: roadbook-modal-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+@keyframes roadbook-modal-pop {
+  from { transform: translateY(8px) scale(0.98); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 .modal-wide { width: 640px; }
-.modal h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 14px; }
+.modal-edit .field + .field { margin-top: 14px; }
+.modal h3 {
+  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ----- Chip group (status / type) ----- */
+.chip-group {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.chip {
+  appearance: none;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-family: inherit;
+  font-size: 12px; font-weight: 500;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease, transform 80ms ease;
+}
+.chip:hover { border-color: var(--border-strong); color: var(--text); }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip.active {
+  border-color: var(--accent);
+  background-color: var(--accent-soft-bg);
+  color: var(--text);
+}
+.chip:active { transform: scale(0.97); }
+.chip-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--status-planned); }
+.chip-dot.dot-conditional { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.chip-stripe { display: inline-block; width: 4px; height: 12px; border-radius: 2px; }
+.stripe-none { background: repeating-linear-gradient(45deg, var(--border) 0 2px, transparent 2px 4px); }
+
+/* ----- Pct value chip in slider label ----- */
+.pct-chip {
+  background-color: var(--accent-soft-bg);
+  color: var(--accent);
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* ----- Polished range slider ----- */
+.slider-wrap { padding: 6px 4px 2px; }
+.field input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--slider-fill, 0%),
+    var(--bg-grid) var(--slider-fill, 0%),
+    var(--bg-grid) 100%
+  );
+  outline: none;
+  padding: 0;
+  cursor: pointer;
+  transition: none;
+}
+.field input[type="range"]:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
+.field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background-color: var(--bg);
+  border: 2px solid var(--accent);
+  cursor: grab;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+.field input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.12); }
+.field input[type="range"]::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.05); }
+.field input[type="range"]::-moz-range-thumb {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background-color: var(--bg);
+  border: 2px solid var(--accent);
+  cursor: grab;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18);
+}
+.field input[type="range"]::-moz-range-track { background: transparent; }
 .modal-sub { font-size: 12px; color: var(--text-dim); margin: -6px 0 14px; }
 .field { margin-bottom: 14px; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -641,10 +774,10 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
     -webkit-overflow-scrolling: touch;
   }
   .axis {
-    min-width: 720px;
+    min-width: 960px;
   }
   .lane {
-    min-width: 720px;
+    min-width: 960px;
   }
   .lane-head { position: sticky; left: 0; background-color: var(--lane-bg); z-index: 4; padding-right: 8px; }
 }
@@ -740,10 +873,18 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 
   <div class="axis">
     <div class="year" id="axisYear">2026</div>
-    <div class="q">Q1</div>
-    <div class="q">Q2</div>
-    <div class="q">Q3</div>
-    <div class="q">Q4</div>
+    <div class="m"><span class="m-q">Q1</span><span class="m-name">Jan</span></div>
+    <div class="m"><span class="m-name">Feb</span></div>
+    <div class="m"><span class="m-name">Mar</span></div>
+    <div class="m"><span class="m-q">Q2</span><span class="m-name">Apr</span></div>
+    <div class="m"><span class="m-name">May</span></div>
+    <div class="m"><span class="m-name">Jun</span></div>
+    <div class="m"><span class="m-q">Q3</span><span class="m-name">Jul</span></div>
+    <div class="m"><span class="m-name">Aug</span></div>
+    <div class="m"><span class="m-name">Sep</span></div>
+    <div class="m"><span class="m-q">Q4</span><span class="m-name">Oct</span></div>
+    <div class="m"><span class="m-name">Nov</span></div>
+    <div class="m"><span class="m-name">Dec</span></div>
   </div>
 
   <div id="lanes" role="list" aria-label="Swim lanes"></div>
@@ -768,41 +909,65 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 </div>
 
 <div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-  <div class="modal">
+  <div class="modal modal-edit">
     <h3 id="modalTitle">Edit item</h3>
+
     <div class="field">
       <label for="fTitle">Title</label>
-      <input type="text" id="fTitle" />
+      <input type="text" id="fTitle" placeholder="What is this?" />
     </div>
-    <div class="field-row">
-      <div class="field">
-        <label for="fDue">Due date</label>
-        <input type="date" id="fDue" />
-      </div>
-      <div class="field">
-        <label for="fStatus">Status</label>
-        <select id="fStatus">
-          <option value="planned">Planned</option>
-          <option value="funded">Funded</option>
-          <option value="soon">Coming Soon</option>
-          <option value="pending">Pending</option>
-          <option value="conditional">If Capacity</option>
-        </select>
-      </div>
-    </div>
+
     <div class="field">
-      <label for="fType">Type</label>
-      <select id="fType">
-        <option value="other">Other (no color)</option>
-        <option value="build">Build</option>
-        <option value="data">Data</option>
-        <option value="polish">Polish</option>
-      </select>
+      <label for="fDue">Due date</label>
+      <input type="date" id="fDue" />
     </div>
+
     <div class="field">
-      <label for="fComplete">Completion <span class="aux" id="fCompleteVal">0%</span></label>
-      <input type="range" id="fComplete" min="0" max="100" step="5" />
+      <label>Status</label>
+      <div class="chip-group" id="fStatusGroup" role="radiogroup" aria-label="Status">
+        <button type="button" class="chip" data-value="planned" role="radio">
+          <span class="chip-dot dot-planned"></span><span>Planned</span>
+        </button>
+        <button type="button" class="chip" data-value="funded" role="radio">
+          <span class="chip-dot dot-funded"></span><span>Funded</span>
+        </button>
+        <button type="button" class="chip" data-value="soon" role="radio">
+          <span class="chip-dot dot-soon"></span><span>Coming soon</span>
+        </button>
+        <button type="button" class="chip" data-value="pending" role="radio">
+          <span class="chip-dot dot-pending"></span><span>Pending</span>
+        </button>
+        <button type="button" class="chip" data-value="conditional" role="radio">
+          <span class="chip-dot dot-conditional"></span><span>If capacity</span>
+        </button>
+      </div>
     </div>
+
+    <div class="field">
+      <label>Type</label>
+      <div class="chip-group" id="fTypeGroup" role="radiogroup" aria-label="Type">
+        <button type="button" class="chip chip-type" data-value="other" role="radio">
+          <span class="chip-stripe stripe-none"></span><span>None</span>
+        </button>
+        <button type="button" class="chip chip-type" data-value="build" role="radio">
+          <span class="chip-stripe stripe-build"></span><span>Build</span>
+        </button>
+        <button type="button" class="chip chip-type" data-value="data" role="radio">
+          <span class="chip-stripe stripe-data"></span><span>Data</span>
+        </button>
+        <button type="button" class="chip chip-type" data-value="polish" role="radio">
+          <span class="chip-stripe stripe-polish"></span><span>Polish</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="fComplete">Completion <span class="aux pct-chip" id="fCompleteVal">0%</span></label>
+      <div class="slider-wrap">
+        <input type="range" id="fComplete" min="0" max="100" step="5" />
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn danger" id="mDelete">Remove</button>
       <div class="spacer"></div>
@@ -827,7 +992,7 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","eyebrow":"Product · 2026","activeYear":"2026","data":{"2026":{"lanes":[{"id":"now","name":"Now","description":"Shipping this quarter.","color":"sage"},{"id":"next","name":"Next","description":"Up next, scoped.","color":"sky"},{"id":"later","name":"Later","description":"On the radar, not scoped.","color":"blush"}],"items":[]},"2027":{"lanes":[],"items":[]}}},"engineering-sprint":{"roadbookVersion":1,"title":"Engineering Roadmap","eyebrow":"Now / Next / Later","activeYear":"2026","data":{"2026":{"lanes":[{"id":"frontend","name":"Frontend","description":"Web app, design system, perf.","color":"sky"},{"id":"backend","name":"Backend","description":"APIs, services, data.","color":"sage"},{"id":"infra","name":"Infra","description":"Deploy, observability, cost.","color":"stone"}],"items":[{"id":"fe1","laneId":"frontend","title":"Design system v2","start":1,"span":2,"row":0,"status":"funded","type":"polish","due":"","complete":30},{"id":"fe2","laneId":"frontend","title":"Bundle size budget","start":1,"span":1,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"fe3","laneId":"frontend","title":"Server components","start":3,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be1","laneId":"backend","title":"GraphQL gateway","start":1,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be2","laneId":"backend","title":"Auth refactor","start":2,"span":1,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"be3","laneId":"backend","title":"Event bus (Kafka)","start":3,"span":2,"row":0,"status":"pending","type":"data","due":"","complete":0},{"id":"in1","laneId":"infra","title":"K8s cluster upgrade","start":1,"span":1,"row":0,"status":"funded","type":"build","due":"","complete":50},{"id":"in2","laneId":"infra","title":"Trace sampling tuning","start":2,"span":1,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"in3","laneId":"infra","title":"Cost rightsizing","start":2,"span":2,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"in4","laneId":"infra","title":"DR runbook","start":4,"span":1,"row":0,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"lanes":[],"items":[]}}},"product-launch":{"roadbookVersion":1,"title":"Product Launch 2026","eyebrow":"Launch plan","activeYear":"2026","data":{"2026":{"lanes":[{"id":"discovery","name":"Discovery","description":"Research and validation before build.","color":"sky"},{"id":"build","name":"Build","description":"Engineering and core feature work.","color":"sage"},{"id":"beta","name":"Beta","description":"Early customers, feedback loops.","color":"lemon"},{"id":"launch","name":"Launch","description":"GA, marketing, scale.","color":"coral"}],"items":[{"id":"d1","laneId":"discovery","title":"Customer interviews","start":1,"span":1,"row":0,"status":"funded","type":"data","due":"","complete":40},{"id":"d2","laneId":"discovery","title":"Pricing research","start":1,"span":2,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"b1","laneId":"build","title":"Core MVP","start":2,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b2","laneId":"build","title":"Onboarding flow","start":3,"span":1,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b3","laneId":"build","title":"Payments integration","start":3,"span":1,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"be1","laneId":"beta","title":"Closed beta (10 users)","start":3,"span":1,"row":0,"status":"soon","type":"polish","due":"","complete":0},{"id":"be2","laneId":"beta","title":"Open beta","start":4,"span":1,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"l1","laneId":"launch","title":"GA release","start":4,"span":1,"row":0,"status":"conditional","type":"build","due":"","complete":0}]},"2027":{"lanes":[],"items":[]}}},"saas-quarterly":{"roadbookVersion":1,"title":"SaaS Roadmap 2026","eyebrow":"Product · Quarterly","activeYear":"2026","data":{"2026":{"lanes":[{"id":"growth","name":"Growth","description":"Acquisition, activation, retention.","color":"mint"},{"id":"product","name":"Product","description":"Features customers will pay more for.","color":"lavender"},{"id":"platform","name":"Platform","description":"Reliability, scale, developer velocity.","color":"stone"}],"items":[{"id":"g1","laneId":"growth","title":"Self-serve signup","start":1,"span":1,"row":0,"status":"funded","type":"build","due":"","complete":60},{"id":"g2","laneId":"growth","title":"Referral program","start":2,"span":1,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"g3","laneId":"growth","title":"Lifecycle emails","start":2,"span":2,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"g4","laneId":"growth","title":"Pricing experiments","start":3,"span":2,"row":0,"status":"soon","type":"data","due":"","complete":0},{"id":"p1","laneId":"product","title":"Workspaces & teams","start":1,"span":2,"row":0,"status":"funded","type":"build","due":"","complete":25},{"id":"p2","laneId":"product","title":"Bulk import / export","start":2,"span":1,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"p3","laneId":"product","title":"API v2","start":3,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"p4","laneId":"product","title":"Mobile app","start":4,"span":1,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"x1","laneId":"platform","title":"Migrate to Postgres 16","start":1,"span":1,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"x2","laneId":"platform","title":"SSO / SAML","start":2,"span":1,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x3","laneId":"platform","title":"Multi-region rollout","start":3,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x4","laneId":"platform","title":"SOC2 audit","start":4,"span":1,"row":1,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"lanes":[],"items":[]}}}};
+window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","eyebrow":"Product · 2026","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"now","name":"Now","description":"Shipping this quarter.","color":"sage"},{"id":"next","name":"Next","description":"Up next, scoped.","color":"sky"},{"id":"later","name":"Later","description":"On the radar, not scoped.","color":"blush"}],"items":[]},"2027":{"granularity":"month","lanes":[],"items":[]}}},"engineering-sprint":{"roadbookVersion":2,"title":"Engineering Roadmap","eyebrow":"Now / Next / Later","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"frontend","name":"Frontend","description":"Web app, design system, perf.","color":"sky"},{"id":"backend","name":"Backend","description":"APIs, services, data.","color":"sage"},{"id":"infra","name":"Infra","description":"Deploy, observability, cost.","color":"stone"}],"items":[{"id":"fe1","laneId":"frontend","title":"Design system v2","start":1,"span":4,"row":0,"status":"funded","type":"polish","due":"","complete":30},{"id":"fe2","laneId":"frontend","title":"Bundle size budget","start":2,"span":2,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"fe3","laneId":"frontend","title":"Server components","start":7,"span":5,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be1","laneId":"backend","title":"GraphQL gateway","start":1,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be2","laneId":"backend","title":"Auth refactor","start":5,"span":2,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"be3","laneId":"backend","title":"Event bus (Kafka)","start":7,"span":4,"row":0,"status":"pending","type":"data","due":"","complete":0},{"id":"in1","laneId":"infra","title":"K8s cluster upgrade","start":1,"span":2,"row":0,"status":"funded","type":"build","due":"","complete":50},{"id":"in2","laneId":"infra","title":"Trace sampling tuning","start":4,"span":2,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"in3","laneId":"infra","title":"Cost rightsizing","start":5,"span":4,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"in4","laneId":"infra","title":"DR runbook","start":11,"span":2,"row":0,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"granularity":"month","lanes":[],"items":[]}}},"product-launch":{"roadbookVersion":2,"title":"Product Launch 2026","eyebrow":"Launch plan","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"discovery","name":"Discovery","description":"Research and validation before build.","color":"sky"},{"id":"build","name":"Build","description":"Engineering and core feature work.","color":"sage"},{"id":"beta","name":"Beta","description":"Early customers, feedback loops.","color":"lemon"},{"id":"launch","name":"Launch","description":"GA, marketing, scale.","color":"coral"}],"items":[{"id":"d1","laneId":"discovery","title":"Customer interviews","start":1,"span":2,"row":0,"status":"funded","type":"data","due":"","complete":40},{"id":"d2","laneId":"discovery","title":"Pricing research","start":2,"span":3,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"b1","laneId":"build","title":"Core MVP","start":4,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b2","laneId":"build","title":"Onboarding flow","start":7,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b3","laneId":"build","title":"Payments integration","start":8,"span":2,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"be1","laneId":"beta","title":"Closed beta (10 users)","start":8,"span":2,"row":0,"status":"soon","type":"polish","due":"","complete":0},{"id":"be2","laneId":"beta","title":"Open beta","start":10,"span":2,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"l1","laneId":"launch","title":"GA release","start":11,"span":2,"row":0,"status":"conditional","type":"build","due":"","complete":0}]},"2027":{"granularity":"month","lanes":[],"items":[]}}},"saas-quarterly":{"roadbookVersion":2,"title":"SaaS Roadmap 2026","eyebrow":"Product · Quarterly","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"growth","name":"Growth","description":"Acquisition, activation, retention.","color":"mint"},{"id":"product","name":"Product","description":"Features customers will pay more for.","color":"lavender"},{"id":"platform","name":"Platform","description":"Reliability, scale, developer velocity.","color":"stone"}],"items":[{"id":"g1","laneId":"growth","title":"Self-serve signup","start":1,"span":2,"row":0,"status":"funded","type":"build","due":"","complete":60},{"id":"g2","laneId":"growth","title":"Referral program","start":4,"span":2,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"g3","laneId":"growth","title":"Lifecycle emails","start":4,"span":4,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"g4","laneId":"growth","title":"Pricing experiments","start":7,"span":5,"row":0,"status":"soon","type":"data","due":"","complete":0},{"id":"p1","laneId":"product","title":"Workspaces & teams","start":1,"span":4,"row":0,"status":"funded","type":"build","due":"","complete":25},{"id":"p2","laneId":"product","title":"Bulk import / export","start":4,"span":2,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"p3","laneId":"product","title":"API v2","start":7,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"p4","laneId":"product","title":"Mobile app","start":10,"span":3,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"x1","laneId":"platform","title":"Migrate to Postgres 16","start":1,"span":2,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"x2","laneId":"platform","title":"SSO / SAML","start":4,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x3","laneId":"platform","title":"Multi-region rollout","start":7,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x4","laneId":"platform","title":"SOC2 audit","start":10,"span":3,"row":1,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"granularity":"month","lanes":[],"items":[]}}}};
 </script>
 <script>
 // state.js — store, persistence, history (undo/redo)
@@ -839,7 +1004,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
   const META_KEY = `${PREFIX}-meta`;
   const YEAR_KEY = `${PREFIX}-active-year`;
   const LAYOUT_KEY = (y) => `${PREFIX}-layout-${y}`;
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2; // v2 = month granularity (1-12)
   const HISTORY_LIMIT = 50;
 
   const PALETTE = [
@@ -913,7 +1078,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
   }
 
   function normalizeYear(y) {
-    const out = { lanes: [], items: [] };
+    const out = { granularity: "month", lanes: [], items: [] };
     if (y && Array.isArray(y.lanes)) {
       out.lanes = y.lanes.map((l, i) => ({
         id: l.id || `lane-${i}-${Math.random().toString(36).slice(2, 7)}`,
@@ -922,19 +1087,38 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
         color: PALETTE.includes(l.color) ? l.color : PALETTE[i % PALETTE.length]
       }));
     }
+    // Decide whether to migrate quarter → month units.
+    // Trigger: granularity missing/quarter, OR all items fit start≤4 && span≤4 (legacy v1 data).
+    const explicitlyQuarter = y && (y.granularity === "quarter" || y.granularity === undefined);
+    const looksLikeQuarterData = y && Array.isArray(y.items) && y.items.length > 0
+      && y.items.every((it) => {
+        const s = parseInt(it.start, 10) || 1;
+        const sp = parseInt(it.span, 10) || 1;
+        return s >= 1 && s <= 4 && sp >= 1 && sp <= 4 && s + sp - 1 <= 4;
+      });
+    const migrate = y && y.granularity !== "month" && (explicitlyQuarter || looksLikeQuarterData);
+
     if (y && Array.isArray(y.items)) {
-      out.items = y.items.map((it, i) => ({
-        id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
-        laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
-        title: String(it.title || "Untitled"),
-        start: clamp(parseInt(it.start, 10) || 1, 1, 4),
-        span: clamp(parseInt(it.span, 10) || 1, 1, 4),
-        row: Math.max(0, parseInt(it.row, 10) || 0),
-        status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
-        type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
-        due: typeof it.due === "string" ? it.due : "",
-        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
-      }));
+      out.items = y.items.map((it, i) => {
+        let start = parseInt(it.start, 10) || 1;
+        let span = parseInt(it.span, 10) || 1;
+        if (migrate) {
+          start = (start - 1) * 3 + 1;
+          span = span * 3;
+        }
+        return {
+          id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
+          laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
+          title: String(it.title || "Untitled"),
+          start: clamp(start, 1, 12),
+          span: clamp(span, 1, 12),
+          row: Math.max(0, parseInt(it.row, 10) || 0),
+          status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
+          type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
+          due: typeof it.due === "string" ? it.due : "",
+          complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
+        };
+      });
     }
     return out;
   }
@@ -1113,6 +1297,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
 // drag.js — pointer-event drag, drop, resize (works for mouse + touch)
 (function () {
   const ROW_H = 34;
+  const COLS = 12; // months
 
   let dragState = null; // { id, pointerId, originLane, originStart, originSpan, originRow, mode: 'move'|'resize' }
 
@@ -1129,7 +1314,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     if (!card) return;
     const body = card.closest(".lane-body");
     const rect = body.getBoundingClientRect();
-    const colW = rect.width / 4;
+    const colW = rect.width / COLS;
     const item = window.Roadbook.state.findItem(card.dataset.id);
     if (!item) return;
 
@@ -1157,7 +1342,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     if (!item) return;
     const dx = e.clientX - dragState.startX;
     const dSpan = Math.round(dx / dragState.colW);
-    const newSpan = Math.max(1, Math.min(5 - item.start, dragState.initialSpan + dSpan));
+    const newSpan = Math.max(1, Math.min(COLS + 1 - item.start, dragState.initialSpan + dSpan));
     if (newSpan !== item.span) {
       window.Roadbook.state.commitSilent(() => { item.span = newSpan; });
       dragState.card.style.setProperty("--span", newSpan);
@@ -1197,7 +1382,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
       originLane: item.laneId,
       originStart: item.start,
       originRow: item.row,
-      colW: startRect.width / 4,
+      colW: startRect.width / COLS,
       card
     };
 
@@ -1226,9 +1411,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     const y = e.clientY - rect.top;
     const item = window.Roadbook.state.findItem(dragState.id);
     if (!item) return;
-    const quarter = Math.max(1, Math.min(4, Math.floor(x / (rect.width / 4)) + 1));
+    const month = Math.max(1, Math.min(COLS, Math.floor(x / (rect.width / COLS)) + 1));
     const row = Math.max(0, Math.floor(y / ROW_H));
-    const start = Math.max(1, Math.min(quarter, 5 - item.span));
+    const start = Math.max(1, Math.min(month, COLS + 1 - item.span));
     showGhost(laneEl, start, item.span, row);
     dragState.dropTarget = { laneId: laneEl.dataset.lane, start, row };
   }
@@ -1283,8 +1468,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     document.querySelectorAll(".ghost").forEach((g) => g.classList.remove("show"));
     const g = body.querySelector(".ghost");
     if (!g) return;
-    g.style.left = `calc((${start} - 1) * 25%)`;
-    g.style.width = `calc(${span} * 25% - 6px)`;
+    g.style.left = `calc((${start} - 1) * (100% / ${COLS}))`;
+    g.style.width = `calc(${span} * (100% / ${COLS}) - 6px)`;
     g.style.top = `${row * ROW_H}px`;
     g.classList.add("show");
   }
@@ -1302,6 +1487,27 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
   let editingId = null;
   let prevFocus = null;
 
+  function setChipGroup(groupId, value) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.querySelectorAll(".chip").forEach((chip) => {
+      const active = chip.dataset.value === value;
+      chip.classList.toggle("active", active);
+      chip.setAttribute("aria-checked", active ? "true" : "false");
+    });
+    group.dataset.value = value;
+  }
+
+  function getChipGroupValue(groupId, fallback) {
+    const group = document.getElementById(groupId);
+    return (group && group.dataset.value) || fallback;
+  }
+
+  function paintSliderFill(value) {
+    const slider = document.getElementById("fComplete");
+    if (slider) slider.style.setProperty("--slider-fill", value + "%");
+  }
+
   function open(itemId) {
     const item = window.Roadbook.state.findItem(itemId);
     if (!item) return;
@@ -1310,11 +1516,12 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
 
     document.getElementById("fTitle").value = item.title;
     document.getElementById("fDue").value = item.due || "";
-    document.getElementById("fStatus").value = item.status || "planned";
-    document.getElementById("fType").value = item.type || "other";
+    setChipGroup("fStatusGroup", item.status || "planned");
+    setChipGroup("fTypeGroup", item.type || "other");
     const complete = item.complete || 0;
     document.getElementById("fComplete").value = complete;
     document.getElementById("fCompleteVal").textContent = complete + "%";
+    paintSliderFill(complete);
     document.getElementById("modalTitle").textContent = `Edit · ${item.title}`;
     document.getElementById("modalOverlay").classList.add("show");
     setTimeout(() => document.getElementById("fTitle").focus(), 40);
@@ -1336,8 +1543,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     const next = {
       title: document.getElementById("fTitle").value.trim() || item.title,
       due: document.getElementById("fDue").value,
-      status: document.getElementById("fStatus").value,
-      type: document.getElementById("fType").value,
+      status: getChipGroupValue("fStatusGroup", "planned"),
+      type: getChipGroupValue("fTypeGroup", "other"),
       complete: parseInt(document.getElementById("fComplete").value, 10) || 0
     };
     const changed = Object.keys(next).some((k) => next[k] !== item[k]);
@@ -1397,11 +1604,25 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
       if (e.target.id === "modalOverlay") close();
     });
     document.getElementById("fComplete").addEventListener("input", (e) => {
-      document.getElementById("fCompleteVal").textContent = e.target.value + "%";
+      const v = e.target.value;
+      document.getElementById("fCompleteVal").textContent = v + "%";
+      paintSliderFill(v);
     });
     document.getElementById("fTitle").addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); save(); }
     });
+
+    // Chip-group click handlers
+    ["fStatusGroup", "fTypeGroup"].forEach((groupId) => {
+      const group = document.getElementById(groupId);
+      if (!group) return;
+      group.addEventListener("click", (e) => {
+        const chip = e.target.closest(".chip");
+        if (!chip) return;
+        setChipGroup(groupId, chip.dataset.value);
+      });
+    });
+
     document.addEventListener("keydown", trapFocus);
   }
 
@@ -1469,14 +1690,16 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     const s = window.Roadbook.state.get();
     const year = s.activeYear;
     const data = s.data[year];
-    const W = 1200;
+    const W = 1280;
     const ROW_H = 34;
     const LANE_HEAD_W = 140;
     const LANE_PAD = 16;
     const GRID_X = LANE_HEAD_W + LANE_PAD + 12;
     const GRID_W = W - GRID_X - LANE_PAD;
-    const QUARTER_W = GRID_W / 4;
+    const COLS = 12;
+    const MONTH_W = GRID_W / COLS;
     const HEADER_H = 96;
+    const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
     const styleVar = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
     const text = styleVar("--text") || "#0A0A0A";
@@ -1519,12 +1742,18 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     out.push(`<text x="${LANE_PAD}" y="32" font-size="11" font-weight="600" fill="${textMuted}" letter-spacing="0.8">${escapeXml(String(s.eyebrow || "").toUpperCase())}</text>`);
     out.push(`<text x="${LANE_PAD}" y="62" font-size="26" font-weight="700" fill="${text}" letter-spacing="-0.5">${escapeXml(s.title || "Roadbook")}</text>`);
 
-    // Year axis
+    // Year axis with quarter group labels + month labels
     const axisY = HEADER_H + 12;
     out.push(`<text x="${LANE_PAD}" y="${axisY}" font-size="12" font-weight="600" fill="${text}">${escapeXml(year)}</text>`);
-    for (let q = 1; q <= 4; q++) {
-      const cx = GRID_X + (q - 0.5) * QUARTER_W;
-      out.push(`<text x="${cx}" y="${axisY}" font-size="10" font-weight="600" fill="${textMuted}" text-anchor="middle" letter-spacing="1">Q${q}</text>`);
+    // Quarter labels above
+    for (let q = 0; q < 4; q++) {
+      const cx = GRID_X + (q * 3 + 0.5) * MONTH_W;
+      out.push(`<text x="${cx}" y="${axisY - 12}" font-size="9" font-weight="700" fill="${textMuted}" letter-spacing="1.2">Q${q + 1}</text>`);
+    }
+    // Month names
+    for (let m = 0; m < COLS; m++) {
+      const cx = GRID_X + (m + 0.5) * MONTH_W;
+      out.push(`<text x="${cx}" y="${axisY}" font-size="10" font-weight="600" fill="${textDim}" text-anchor="middle">${MONTH_NAMES[m]}</text>`);
     }
     out.push(`<line x1="${LANE_PAD}" y1="${axisY + 6}" x2="${W - LANE_PAD}" y2="${axisY + 6}" stroke="${border}" stroke-width="1"/>`);
 
@@ -1545,16 +1774,17 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
       if (lane.description) {
         out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 44}" font-size="11" fill="${textDim}">${escapeXml(lane.description)}</text>`);
       }
-      // Quarter gridlines for this lane
-      for (let q = 1; q <= 3; q++) {
-        const x = GRID_X + q * QUARTER_W;
-        out.push(`<line x1="${x}" y1="${cursorY + 8}" x2="${x}" y2="${cursorY + lh - 8}" stroke="${border}" stroke-width="0.5" stroke-dasharray="2 3" opacity="0.5"/>`);
+      // Month gridlines for this lane (light) and quarter dividers (stronger)
+      for (let m = 1; m < COLS; m++) {
+        const x = GRID_X + m * MONTH_W;
+        const isQ = (m % 3 === 0);
+        out.push(`<line x1="${x}" y1="${cursorY + 8}" x2="${x}" y2="${cursorY + lh - 8}" stroke="${isQ ? styleVar("--border-strong") || "#D1D5DB" : border}" stroke-width="${isQ ? 0.7 : 0.4}" opacity="${isQ ? 0.7 : 0.45}"/>`);
       }
 
       // Items
       data.items.filter((it) => it.laneId === lane.id).forEach((it) => {
-        const x = GRID_X + (it.start - 1) * QUARTER_W;
-        const w = it.span * QUARTER_W - 6;
+        const x = GRID_X + (it.start - 1) * MONTH_W;
+        const w = it.span * MONTH_W - 6;
         const y = cursorY + 16 + it.row * ROW_H;
         const h = 30;
         // Card body
@@ -1806,6 +2036,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
 // app.js — main entry: render lanes/cards, wire top controls, keyboard nav
 (function () {
   const ROW_H = 34;
+  const COLS = 12; // months
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -1916,7 +2147,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     card.style.setProperty("--span", item.span);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, Q${item.start}, span ${item.span}`);
+    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
     card.innerHTML = `
       <div class="fill"></div>
       <span class="dot" aria-hidden="true"></span>
@@ -1948,7 +2179,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
     card.style.setProperty("--span", item.span);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, Q${item.start}, span ${item.span}`);
+    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
   }
@@ -1980,7 +2211,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
       window.Roadbook.state.currentYear().items.push({
         id, laneId,
         title: "New item",
-        start: 1, span: 1, row: r,
+        start: 1, span: 3, row: r, // default to one quarter (3 months)
         status: "planned",
         type: "other",
         due: "",
@@ -2109,7 +2340,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
 
     if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
       const delta = e.key === "ArrowRight" ? 1 : -1;
-      const newSpan = Math.max(1, Math.min(5 - item.start, item.span + delta));
+      const newSpan = Math.max(1, Math.min(COLS + 1 - item.start, item.span + delta));
       if (newSpan !== item.span) {
         window.Roadbook.state.commit(() => { item.span = newSpan; });
         updateCardDom(item);
@@ -2119,7 +2350,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","ey
 
     let { start, row, laneId } = item;
     if (e.key === "ArrowLeft") start = Math.max(1, start - 1);
-    if (e.key === "ArrowRight") start = Math.min(5 - item.span, start + 1);
+    if (e.key === "ArrowRight") start = Math.min(COLS + 1 - item.span, start + 1);
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       const y = window.Roadbook.state.currentYear();
       const idx = y.lanes.findIndex((l) => l.id === laneId);

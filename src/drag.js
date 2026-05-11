@@ -1,6 +1,7 @@
 // drag.js — pointer-event drag, drop, resize (works for mouse + touch)
 (function () {
   const ROW_H = 34;
+  const COLS = 12; // months
 
   let dragState = null; // { id, pointerId, originLane, originStart, originSpan, originRow, mode: 'move'|'resize' }
 
@@ -17,7 +18,7 @@
     if (!card) return;
     const body = card.closest(".lane-body");
     const rect = body.getBoundingClientRect();
-    const colW = rect.width / 4;
+    const colW = rect.width / COLS;
     const item = window.Roadbook.state.findItem(card.dataset.id);
     if (!item) return;
 
@@ -45,7 +46,7 @@
     if (!item) return;
     const dx = e.clientX - dragState.startX;
     const dSpan = Math.round(dx / dragState.colW);
-    const newSpan = Math.max(1, Math.min(5 - item.start, dragState.initialSpan + dSpan));
+    const newSpan = Math.max(1, Math.min(COLS + 1 - item.start, dragState.initialSpan + dSpan));
     if (newSpan !== item.span) {
       window.Roadbook.state.commitSilent(() => { item.span = newSpan; });
       dragState.card.style.setProperty("--span", newSpan);
@@ -85,7 +86,7 @@
       originLane: item.laneId,
       originStart: item.start,
       originRow: item.row,
-      colW: startRect.width / 4,
+      colW: startRect.width / COLS,
       card
     };
 
@@ -114,9 +115,9 @@
     const y = e.clientY - rect.top;
     const item = window.Roadbook.state.findItem(dragState.id);
     if (!item) return;
-    const quarter = Math.max(1, Math.min(4, Math.floor(x / (rect.width / 4)) + 1));
+    const month = Math.max(1, Math.min(COLS, Math.floor(x / (rect.width / COLS)) + 1));
     const row = Math.max(0, Math.floor(y / ROW_H));
-    const start = Math.max(1, Math.min(quarter, 5 - item.span));
+    const start = Math.max(1, Math.min(month, COLS + 1 - item.span));
     showGhost(laneEl, start, item.span, row);
     dragState.dropTarget = { laneId: laneEl.dataset.lane, start, row };
   }
@@ -171,8 +172,8 @@
     document.querySelectorAll(".ghost").forEach((g) => g.classList.remove("show"));
     const g = body.querySelector(".ghost");
     if (!g) return;
-    g.style.left = `calc((${start} - 1) * 25%)`;
-    g.style.width = `calc(${span} * 25% - 6px)`;
+    g.style.left = `calc((${start} - 1) * (100% / ${COLS}))`;
+    g.style.width = `calc(${span} * (100% / ${COLS}) - 6px)`;
     g.style.top = `${row * ROW_H}px`;
     g.classList.add("show");
   }

@@ -1,28 +1,29 @@
 {
-  "roadbookVersion": 1,
+  "roadbookVersion": 2,
   "title": "Engineering Roadmap",
   "eyebrow": "Now / Next / Later",
   "activeYear": "2026",
   "data": {
     "2026": {
+      "granularity": "month",
       "lanes": [
         { "id": "frontend", "name": "Frontend", "description": "Web app, design system, perf.", "color": "sky" },
         { "id": "backend",  "name": "Backend",  "description": "APIs, services, data.",         "color": "sage" },
         { "id": "infra",    "name": "Infra",    "description": "Deploy, observability, cost.",  "color": "stone" }
       ],
       "items": [
-        { "id": "fe1", "laneId": "frontend", "title": "Design system v2",       "start": 1, "span": 2, "row": 0, "status": "funded",  "type": "polish", "due": "", "complete": 30 },
-        { "id": "fe2", "laneId": "frontend", "title": "Bundle size budget",     "start": 1, "span": 1, "row": 1, "status": "planned", "type": "polish", "due": "", "complete": 0 },
-        { "id": "fe3", "laneId": "frontend", "title": "Server components",     "start": 3, "span": 2, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
-        { "id": "be1", "laneId": "backend",  "title": "GraphQL gateway",       "start": 1, "span": 2, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
-        { "id": "be2", "laneId": "backend",  "title": "Auth refactor",         "start": 2, "span": 1, "row": 1, "status": "planned", "type": "build", "due": "", "complete": 0 },
-        { "id": "be3", "laneId": "backend",  "title": "Event bus (Kafka)",     "start": 3, "span": 2, "row": 0, "status": "pending", "type": "data",  "due": "", "complete": 0 },
-        { "id": "in1", "laneId": "infra",    "title": "K8s cluster upgrade",   "start": 1, "span": 1, "row": 0, "status": "funded",  "type": "build", "due": "", "complete": 50 },
-        { "id": "in2", "laneId": "infra",    "title": "Trace sampling tuning", "start": 2, "span": 1, "row": 0, "status": "planned", "type": "data",  "due": "", "complete": 0 },
-        { "id": "in3", "laneId": "infra",    "title": "Cost rightsizing",      "start": 2, "span": 2, "row": 1, "status": "planned", "type": "polish","due": "", "complete": 0 },
-        { "id": "in4", "laneId": "infra",    "title": "DR runbook",            "start": 4, "span": 1, "row": 0, "status": "conditional", "type": "polish", "due": "", "complete": 0 }
+        { "id": "fe1", "laneId": "frontend", "title": "Design system v2",        "start": 1,  "span": 4, "row": 0, "status": "funded",  "type": "polish", "due": "", "complete": 30 },
+        { "id": "fe2", "laneId": "frontend", "title": "Bundle size budget",      "start": 2,  "span": 2, "row": 1, "status": "planned", "type": "polish", "due": "", "complete": 0 },
+        { "id": "fe3", "laneId": "frontend", "title": "Server components",       "start": 7,  "span": 5, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
+        { "id": "be1", "laneId": "backend",  "title": "GraphQL gateway",         "start": 1,  "span": 4, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
+        { "id": "be2", "laneId": "backend",  "title": "Auth refactor",           "start": 5,  "span": 2, "row": 1, "status": "planned", "type": "build", "due": "", "complete": 0 },
+        { "id": "be3", "laneId": "backend",  "title": "Event bus (Kafka)",       "start": 7,  "span": 4, "row": 0, "status": "pending", "type": "data",  "due": "", "complete": 0 },
+        { "id": "in1", "laneId": "infra",    "title": "K8s cluster upgrade",     "start": 1,  "span": 2, "row": 0, "status": "funded",  "type": "build", "due": "", "complete": 50 },
+        { "id": "in2", "laneId": "infra",    "title": "Trace sampling tuning",   "start": 4,  "span": 2, "row": 0, "status": "planned", "type": "data",  "due": "", "complete": 0 },
+        { "id": "in3", "laneId": "infra",    "title": "Cost rightsizing",        "start": 5,  "span": 4, "row": 1, "status": "planned", "type": "polish","due": "", "complete": 0 },
+        { "id": "in4", "laneId": "infra",    "title": "DR runbook",              "start": 11, "span": 2, "row": 0, "status": "conditional", "type": "polish", "due": "", "complete": 0 }
       ]
     },
-    "2027": { "lanes": [], "items": [] }
+    "2027": { "granularity": "month", "lanes": [], "items": [] }
   }
 }
