@@ -24,6 +24,28 @@
     if (slider) slider.style.setProperty("--slider-fill", value + "%");
   }
 
+  function updateDurationHint() {
+    const start = document.getElementById("fStartDate").value;
+    const end = document.getElementById("fEndDate").value;
+    const dates = window.Roadbook.dates;
+    if (!start || !end) {
+      document.getElementById("fDurationHint").textContent = "—";
+      return;
+    }
+    const days = dates.diffDays(start, end) + 1;
+    if (days < 1) {
+      document.getElementById("fDurationHint").textContent = "End is before start";
+      document.getElementById("fDurationHint").classList.add("warn");
+      return;
+    }
+    document.getElementById("fDurationHint").classList.remove("warn");
+    const weeks = Math.round(days / 7 * 10) / 10;
+    document.getElementById("fDurationHint").textContent =
+      days === 1 ? "1 day" :
+      days < 14 ? `${days} days` :
+      `${days} days · ${weeks} weeks`;
+  }
+
   function open(itemId) {
     const item = window.Roadbook.state.findItem(itemId);
     if (!item) return;
@@ -31,7 +53,9 @@
     prevFocus = document.activeElement;
 
     document.getElementById("fTitle").value = item.title;
-    document.getElementById("fDue").value = item.due || "";
+    document.getElementById("fStartDate").value = item.startDate || "";
+    document.getElementById("fEndDate").value = item.endDate || "";
+    updateDurationHint();
     setChipGroup("fStatusGroup", item.status || "planned");
     setChipGroup("fTypeGroup", item.type || "other");
     const complete = item.complete || 0;
@@ -56,9 +80,15 @@
     if (!editingId) return;
     const item = window.Roadbook.state.findItem(editingId);
     if (!item) return;
+    const dates = window.Roadbook.dates;
+    let startDate = document.getElementById("fStartDate").value || item.startDate;
+    let endDate = document.getElementById("fEndDate").value || item.endDate;
+    // Auto-clamp: end must be >= start
+    if (dates.diffDays(startDate, endDate) < 0) endDate = startDate;
     const next = {
       title: document.getElementById("fTitle").value.trim() || item.title,
-      due: document.getElementById("fDue").value,
+      startDate,
+      endDate,
       status: getChipGroupValue("fStatusGroup", "planned"),
       type: getChipGroupValue("fTypeGroup", "other"),
       complete: parseInt(document.getElementById("fComplete").value, 10) || 0
@@ -126,6 +156,10 @@
     });
     document.getElementById("fTitle").addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); save(); }
+    });
+    ["fStartDate", "fEndDate"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", updateDurationHint);
     });
 
     // Chip-group click handlers

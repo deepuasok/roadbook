@@ -7,8 +7,9 @@
   const META_KEY = `${PREFIX}-meta`;
   const YEAR_KEY = `${PREFIX}-active-year`;
   const LAYOUT_KEY = (y) => `${PREFIX}-layout-${y}`;
-  const SCHEMA_VERSION = 2; // v2 = month granularity (1-12)
+  const SCHEMA_VERSION = 3; // v3 = day-precise (startDate/endDate ISO), 14-day drag snap
   const HISTORY_LIMIT = 50;
+  const SNAP_DAYS = 14;
 
   const PALETTE = [
     "cream", "sage", "blush", "mint", "peach", "rose",
@@ -43,6 +44,73 @@
 
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
+  // ---------- Date utilities ----------
+  function isLeap(year) {
+    const y = parseInt(year, 10);
+    return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  }
+  function daysInYear(year) {
+    return isLeap(year) ? 366 : 365;
+  }
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+  function isoFromYMD(y, m, d) { return `${y}-${pad2(m)}-${pad2(d)}`; }
+  function parseIso(iso) {
+    if (typeof iso !== "string") return null;
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+  function isoToDate(iso) { return parseIso(iso); }
+  function dateToIso(d) {
+    return isoFromYMD(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+  function addDaysIso(iso, n) {
+    const d = parseIso(iso);
+    if (!d) return iso;
+    d.setUTCDate(d.getUTCDate() + n);
+    return dateToIso(d);
+  }
+  function dayOfYear(iso) {
+    const d = parseIso(iso);
+    if (!d) return 1;
+    const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.floor((d - start) / 86400000) + 1;
+  }
+  function lastDayOfMonth(year, monthIndex0) {
+    return new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
+  }
+  function diffDays(isoA, isoB) {
+    const a = parseIso(isoA), b = parseIso(isoB);
+    if (!a || !b) return 0;
+    return Math.round((b - a) / 86400000);
+  }
+  function clampToYear(iso, year) {
+    const d = parseIso(iso);
+    if (!d) return isoFromYMD(year, 1, 1);
+    const y = d.getUTCFullYear();
+    if (y < year) return isoFromYMD(year, 1, 1);
+    if (y > year) return isoFromYMD(year, 12, 31);
+    return iso;
+  }
+  // Snap an ISO date to the nearest SNAP_DAYS boundary measured from Jan 1 of that year
+  function snapToBiweek(iso, year) {
+    const day = dayOfYear(iso) - 1; // 0-based
+    const snapped = Math.round(day / SNAP_DAYS) * SNAP_DAYS;
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    yearStart.setUTCDate(yearStart.getUTCDate() + snapped);
+    return dateToIso(yearStart);
+  }
+  // Snap end date relative to start so duration is a multiple of SNAP_DAYS
+  function snapDurationFromStart(startIso, endIso) {
+    const startDay = dayOfYear(startIso);
+    const endDay = dayOfYear(endIso);
+    let duration = endDay - startDay + 1; // inclusive days
+    duration = Math.max(SNAP_DAYS, Math.round(duration / SNAP_DAYS) * SNAP_DAYS);
+    return addDaysIso(startIso, duration - 1);
+  }
+
   function load() {
     try {
       const metaRaw = localStorage.getItem(META_KEY);
@@ -60,7 +128,7 @@
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
-            store.data[y] = normalizeYear(parsed);
+            store.data[y] = normalizeYear(parsed, y);
           } catch (_) {
             store.data[y] = { lanes: [], items: [] };
           }
@@ -80,8 +148,9 @@
     snapshot();
   }
 
-  function normalizeYear(y) {
-    const out = { granularity: "month", lanes: [], items: [] };
+  function normalizeYear(y, yearLabel) {
+    const year = parseInt(yearLabel, 10) || 2026;
+    const out = { granularity: "day", lanes: [], items: [] };
     if (y && Array.isArray(y.lanes)) {
       out.lanes = y.lanes.map((l, i) => ({
         id: l.id || `lane-${i}-${Math.random().toString(36).slice(2, 7)}`,
@@ -90,39 +159,66 @@
         color: PALETTE.includes(l.color) ? l.color : PALETTE[i % PALETTE.length]
       }));
     }
-    // Decide whether to migrate quarter → month units.
-    // Trigger: granularity missing/quarter, OR all items fit start≤4 && span≤4 (legacy v1 data).
-    const explicitlyQuarter = y && (y.granularity === "quarter" || y.granularity === undefined);
-    const looksLikeQuarterData = y && Array.isArray(y.items) && y.items.length > 0
+
+    if (!y || !Array.isArray(y.items)) return out;
+
+    // Detect schema and migrate.
+    // v3 (day): granularity === "day" OR items have startDate/endDate
+    // v2 (month): granularity === "month" OR items have start in 1-12, span in 1-12
+    // v1 (quarter): items have start/span in 1-4
+    const firstItem = y.items[0] || {};
+    const isV3 = y.granularity === "day" || (firstItem.startDate && firstItem.endDate);
+    const explicitV2 = y.granularity === "month";
+    const looksLikeV2 = !isV3 && !explicitV2 && y.items.length > 0
+      && y.items.every((it) => {
+        const s = parseInt(it.start, 10) || 1;
+        const sp = parseInt(it.span, 10) || 1;
+        return s >= 1 && s <= 12 && sp >= 1 && sp <= 12 && s + sp - 1 <= 12;
+      });
+    const explicitV1 = y.granularity === "quarter";
+    const looksLikeV1 = !isV3 && !explicitV2 && !looksLikeV2 && y.items.length > 0
       && y.items.every((it) => {
         const s = parseInt(it.start, 10) || 1;
         const sp = parseInt(it.span, 10) || 1;
         return s >= 1 && s <= 4 && sp >= 1 && sp <= 4 && s + sp - 1 <= 4;
       });
-    const migrate = y && y.granularity !== "month" && (explicitlyQuarter || looksLikeQuarterData);
 
-    if (y && Array.isArray(y.items)) {
-      out.items = y.items.map((it, i) => {
-        let start = parseInt(it.start, 10) || 1;
+    out.items = y.items.map((it, i) => {
+      let startDate, endDate;
+      if (isV3) {
+        startDate = typeof it.startDate === "string" ? it.startDate : isoFromYMD(year, 1, 1);
+        endDate = typeof it.endDate === "string" ? it.endDate : addDaysIso(startDate, SNAP_DAYS - 1);
+      } else {
+        let startMonth = parseInt(it.start, 10) || 1;
         let span = parseInt(it.span, 10) || 1;
-        if (migrate) {
-          start = (start - 1) * 3 + 1;
+        if (explicitV1 || looksLikeV1) {
+          startMonth = (startMonth - 1) * 3 + 1;
           span = span * 3;
         }
-        return {
-          id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
-          laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
-          title: String(it.title || "Untitled"),
-          start: clamp(start, 1, 12),
-          span: clamp(span, 1, 12),
-          row: Math.max(0, parseInt(it.row, 10) || 0),
-          status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
-          type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
-          due: typeof it.due === "string" ? it.due : "",
-          complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
-        };
-      });
-    }
+        startMonth = clamp(startMonth, 1, 12);
+        span = clamp(span, 1, 13 - startMonth);
+        const endMonth = startMonth + span - 1;
+        startDate = isoFromYMD(year, startMonth, 1);
+        endDate = isoFromYMD(year, endMonth, lastDayOfMonth(year, endMonth - 1));
+      }
+
+      // Clamp to active year boundaries (v0.3 — cross-year items not supported)
+      startDate = clampToYear(startDate, year);
+      endDate = clampToYear(endDate, year);
+      if (diffDays(startDate, endDate) < 0) endDate = startDate;
+
+      return {
+        id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
+        laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
+        title: String(it.title || "Untitled"),
+        startDate,
+        endDate,
+        row: Math.max(0, parseInt(it.row, 10) || 0),
+        status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
+        type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
+        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
+      };
+    });
     return out;
   }
 
@@ -246,7 +342,7 @@
       }
       if (payload.data) {
         ["2026", "2027"].forEach((y) => {
-          if (payload.data[y]) store.data[y] = normalizeYear(payload.data[y]);
+          if (payload.data[y]) store.data[y] = normalizeYear(payload.data[y], y);
         });
       }
     });
@@ -271,6 +367,7 @@
   window.Roadbook.state = {
     PALETTE,
     SCHEMA_VERSION,
+    SNAP_DAYS,
     load,
     persist,
     snapshot,
@@ -293,5 +390,20 @@
     normalizeYear,
     uid,
     get: () => store
+  };
+  window.Roadbook.dates = {
+    SNAP_DAYS,
+    isLeap,
+    daysInYear,
+    isoFromYMD,
+    parseIso,
+    dateToIso,
+    addDaysIso,
+    dayOfYear,
+    lastDayOfMonth,
+    diffDays,
+    clampToYear,
+    snapToBiweek,
+    snapDurationFromStart
   };
 })();

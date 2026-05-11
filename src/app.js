@@ -1,7 +1,7 @@
 // app.js — main entry: render lanes/cards, wire top controls, keyboard nav
 (function () {
   const ROW_H = 34;
-  const COLS = 12; // months
+  const NARROW_DAYS = 90; // below ~3 months, hide meta so title gets the room
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -33,6 +33,11 @@
 
     const container = document.getElementById("lanes");
     container.innerHTML = "";
+    // Set --year-days for date-based card positioning
+    const yearInt = parseInt(s.activeYear, 10) || 2026;
+    const yearDays = window.Roadbook.dates.daysInYear(yearInt);
+    container.style.setProperty("--year-days", yearDays);
+
     const y = window.Roadbook.state.currentYear();
     y.lanes.forEach((lane) => container.appendChild(renderLane(lane)));
     y.items.forEach((item) => placeItem(item));
@@ -97,6 +102,14 @@
     });
   }
 
+  function spanInfo(item) {
+    const dates = window.Roadbook.dates;
+    const startDay = dates.dayOfYear(item.startDate);
+    const endDay = dates.dayOfYear(item.endDate);
+    const spanDays = Math.max(1, endDay - startDay + 1);
+    return { startDay, endDay, spanDays };
+  }
+
   function placeItem(item) {
     const body = document.querySelector(`.lane-body[data-lane="${item.laneId}"]`);
     if (!body) return null;
@@ -108,11 +121,14 @@
     card.dataset.status = item.status || "planned";
     card.dataset.type = item.type || "other";
     card.dataset.complete = String(item.complete || 0);
-    card.style.setProperty("--start", item.start);
-    card.style.setProperty("--span", item.span);
+    const { startDay, spanDays } = spanInfo(item);
+    card.style.setProperty("--start-day", startDay);
+    card.style.setProperty("--span-days", spanDays);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
+    if (spanDays < NARROW_DAYS) card.dataset.narrow = "true";
+    card.setAttribute("aria-label",
+      `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.innerHTML = `
       <div class="fill"></div>
       <span class="dot" aria-hidden="true"></span>
@@ -130,7 +146,7 @@
   function renderMeta(item) {
     const parts = [];
     if (item.complete && item.complete > 0) parts.push(`<span class="pct">${item.complete}%</span>`);
-    if (item.due) parts.push(escapeHtml(fmtDate(item.due)));
+    if (item.endDate) parts.push(escapeHtml(fmtDate(item.endDate)));
     return parts.join(" · ");
   }
 
@@ -140,11 +156,15 @@
     card.dataset.status = item.status;
     card.dataset.type = item.type;
     card.dataset.complete = String(item.complete || 0);
-    card.style.setProperty("--start", item.start);
-    card.style.setProperty("--span", item.span);
+    const { startDay, spanDays } = spanInfo(item);
+    card.style.setProperty("--start-day", startDay);
+    card.style.setProperty("--span-days", spanDays);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
+    if (spanDays < NARROW_DAYS) card.dataset.narrow = "true";
+    else delete card.dataset.narrow;
+    card.setAttribute("aria-label",
+      `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
   }
@@ -167,19 +187,23 @@
   // ---------- Mutations ----------
   function addItem(laneId) {
     const id = window.Roadbook.state.uid("it");
+    const dates = window.Roadbook.dates;
+    const yearInt = parseInt(window.Roadbook.state.get().activeYear, 10) || 2026;
+    const startDate = dates.isoFromYMD(yearInt, 1, 1);
+    const endDate = dates.addDaysIso(startDate, dates.SNAP_DAYS - 1); // 2 weeks default
     let r = 0;
     window.Roadbook.state.commit(() => {
       const rowsUsed = window.Roadbook.state.currentYear().items
-        .filter((i) => i.laneId === laneId && i.start === 1)
+        .filter((i) => i.laneId === laneId && i.startDate === startDate)
         .map((i) => i.row);
       while (rowsUsed.includes(r)) r++;
       window.Roadbook.state.currentYear().items.push({
         id, laneId,
         title: "New item",
-        start: 1, span: 3, row: r, // default to one quarter (3 months)
+        startDate, endDate,
+        row: r,
         status: "planned",
         type: "other",
-        due: "",
         complete: 0
       });
     });
@@ -303,19 +327,37 @@
     if (!arrows.includes(e.key)) return;
     e.preventDefault();
 
+    const dates = window.Roadbook.dates;
+    const yearInt = parseInt(window.Roadbook.state.get().activeYear, 10) || 2026;
+    const totalDays = dates.daysInYear(yearInt);
+    const SNAP = dates.SNAP_DAYS;
+    const startDay = dates.dayOfYear(item.startDate);
+    const endDay = dates.dayOfYear(item.endDate);
+    const spanDays = endDay - startDay + 1;
+
     if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-      const delta = e.key === "ArrowRight" ? 1 : -1;
-      const newSpan = Math.max(1, Math.min(COLS + 1 - item.start, item.span + delta));
-      if (newSpan !== item.span) {
-        window.Roadbook.state.commit(() => { item.span = newSpan; });
+      // Resize: change endDate by ±14 days
+      const delta = e.key === "ArrowRight" ? SNAP : -SNAP;
+      let newSpan = Math.max(SNAP, spanDays + delta);
+      newSpan = Math.min(totalDays - startDay + 1, newSpan);
+      const newEnd = dates.addDaysIso(item.startDate, newSpan - 1);
+      if (newEnd !== item.endDate) {
+        window.Roadbook.state.commit(() => { item.endDate = newEnd; });
         updateCardDom(item);
       }
       return;
     }
 
-    let { start, row, laneId } = item;
-    if (e.key === "ArrowLeft") start = Math.max(1, start - 1);
-    if (e.key === "ArrowRight") start = Math.min(COLS + 1 - item.span, start + 1);
+    let newStart = item.startDate;
+    let row = item.row;
+    let laneId = item.laneId;
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      const delta = e.key === "ArrowRight" ? SNAP : -SNAP;
+      let nextStartDay = startDay - 1 + delta; // 0-based
+      nextStartDay = Math.max(0, Math.min(totalDays - spanDays, nextStartDay));
+      newStart = dates.addDaysIso(dates.isoFromYMD(yearInt, 1, 1), nextStartDay);
+    }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       const y = window.Roadbook.state.currentYear();
       const idx = y.lanes.findIndex((l) => l.id === laneId);
@@ -323,19 +365,19 @@
         row -= 1;
       } else if (e.key === "ArrowUp" && idx > 0) {
         laneId = y.lanes[idx - 1].id;
-      } else if (e.key === "ArrowDown") {
-        // Within current lane: bump row; if at the (visual) bottom, move to next lane.
-        if (idx < y.lanes.length - 1) {
-          // Heuristic: holding ArrowDown moves between lanes when row 0 in next lane is free
-          row += 1;
-        }
+      } else if (e.key === "ArrowDown" && idx < y.lanes.length - 1) {
+        row += 1;
       }
     }
 
     const oldLane = item.laneId;
-    if (start !== item.start || row !== item.row || laneId !== item.laneId) {
+    const changed = newStart !== item.startDate || row !== item.row || laneId !== item.laneId;
+    if (changed) {
       window.Roadbook.state.commit(() => {
-        item.start = start;
+        if (newStart !== item.startDate) {
+          item.endDate = dates.addDaysIso(newStart, spanDays - 1);
+          item.startDate = newStart;
+        }
         item.row = row;
         item.laneId = laneId;
       });

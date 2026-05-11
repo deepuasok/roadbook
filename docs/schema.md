@@ -6,7 +6,7 @@ A Roadbook is a single JSON document. Export with the **Export** button; import 
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `roadbookVersion` | number | yes | Schema version. Currently `2` (months). v1 files using quarters auto-migrate on import. |
+| `roadbookVersion` | number | yes | Schema version. Currently `3` (day-precise). v1/v2 files auto-migrate on import. |
 | `title` | string | yes | Roadmap title (header). Max 120 chars. |
 | `eyebrow` | string | no | Subtitle / kicker above the title. Max 80 chars. |
 | `activeYear` | `"2026"` \| `"2027"` | yes | Which year tab is selected on load. |
@@ -17,7 +17,7 @@ A Roadbook is a single JSON document. Export with the **Export** button; import 
 
 ```ts
 {
-  granularity: "month",  // optional; defaults to "month" — legacy "quarter" data migrates on load
+  granularity: "day",  // optional; defaults to "day" — legacy "month"/"quarter" data migrates on load
   lanes: Lane[],
   items: Item[]
 }
@@ -39,12 +39,11 @@ A Roadbook is a single JSON document. Export with the **Export** button; import 
 | `id` | string | yes | Unique within the year. |
 | `laneId` | string | yes | Must match a `Lane.id` in the same year. |
 | `title` | string | yes | Card label. |
-| `start` | 1–12 | yes | Month the item starts in (1 = Jan). |
-| `span` | 1–12 | yes | Number of months the item covers. `start + span - 1` ≤ 12. |
+| `startDate` | ISO date | yes | `YYYY-MM-DD`. Must fall within the parent year. |
+| `endDate` | ISO date | yes | `YYYY-MM-DD`. Must be ≥ `startDate` and within the year. |
 | `row` | int ≥ 0 | yes | Vertical position within the lane (0 = top). Multiple items can occupy the same lane on different rows. |
 | `status` | enum | yes | `planned`, `funded`, `soon`, `pending`, `conditional`. |
 | `type` | enum | yes | `other`, `build`, `data`, `polish`. Drives the left color stripe. |
-| `due` | ISO date string | no | `YYYY-MM-DD`. Empty string for no due date. |
 | `complete` | 0–100 | no | Completion percentage. Renders as a fill behind the card. |
 
 ## Status semantics
@@ -64,29 +63,35 @@ These are generic. Repurpose them by editing the labels in `src/index.template.h
 - `polish` — UX / quality / cleanup
 - `other` — no stripe color
 
+## Drag and resize snap
+
+The drag/drop and resize interactions snap to **14-day boundaries** measured from Jan 1 of the active year. That keeps the visual grid clean while still allowing exact day-precision durations: a 17-day chip stays 17 days wide when moved, just slides in 14-day jumps. Edit the modal directly for exact dates that don't sit on a 14-day boundary.
+
 ## Minimal example
 
 ```json
 {
-  "roadbookVersion": 1,
+  "roadbookVersion": 3,
   "title": "Q1 2026",
   "eyebrow": "Plan",
   "activeYear": "2026",
   "data": {
     "2026": {
+      "granularity": "day",
       "lanes": [
         { "id": "build", "name": "Build", "color": "sage" }
       ],
       "items": [
         {
           "id": "x", "laneId": "build", "title": "Ship",
-          "start": 1, "span": 4, "row": 0,
+          "startDate": "2026-01-01", "endDate": "2026-03-31",
+          "row": 0,
           "status": "planned", "type": "build",
-          "due": "", "complete": 0
+          "complete": 0
         }
       ]
     },
-    "2027": { "lanes": [], "items": [] }
+    "2027": { "granularity": "day", "lanes": [], "items": [] }
   }
 }
 ```

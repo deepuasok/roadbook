@@ -67,6 +67,10 @@
     const MONTH_W = GRID_W / COLS;
     const HEADER_H = 96;
     const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const dates = window.Roadbook.dates;
+    const yearInt = parseInt(year, 10);
+    const YEAR_DAYS = dates.daysInYear(yearInt);
+    const DAY_W = GRID_W / YEAR_DAYS;
 
     const styleVar = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
     const text = styleVar("--text") || "#0A0A0A";
@@ -148,10 +152,13 @@
         out.push(`<line x1="${x}" y1="${cursorY + 8}" x2="${x}" y2="${cursorY + lh - 8}" stroke="${isQ ? styleVar("--border-strong") || "#D1D5DB" : border}" stroke-width="${isQ ? 0.7 : 0.4}" opacity="${isQ ? 0.7 : 0.45}"/>`);
       }
 
-      // Items
+      // Items (positioned by day-of-year)
       data.items.filter((it) => it.laneId === lane.id).forEach((it) => {
-        const x = GRID_X + (it.start - 1) * MONTH_W;
-        const w = it.span * MONTH_W - 6;
+        const startDay = dates.dayOfYear(it.startDate);
+        const endDay = dates.dayOfYear(it.endDate);
+        const spanDays = Math.max(1, endDay - startDay + 1);
+        const x = GRID_X + (startDay - 1) * DAY_W;
+        const w = Math.max(8, spanDays * DAY_W - 6);
         const y = cursorY + 16 + it.row * ROW_H;
         const h = 30;
         // Card body

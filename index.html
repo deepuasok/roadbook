@@ -401,8 +401,8 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 /* ---------- 7. Cards ---------- */
 .card {
   position: absolute;
-  left: calc((var(--start, 1) - 1) * (100% / 12));
-  width: calc(var(--span, 1) * (100% / 12) - var(--row-gap));
+  left: calc((var(--start-day, 1) - 1) * (100% / var(--year-days, 365)));
+  width: calc(var(--span-days, 14) * (100% / var(--year-days, 365)) - var(--row-gap));
   top: calc(var(--row, 0) * var(--row-h));
   height: var(--pill-h);
   background-color: var(--pill-bg);
@@ -476,6 +476,14 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   display: inline-flex; gap: 6px;
 }
 .card .meta .pct { color: var(--fill-pct-text); font-weight: 600; }
+
+/* Narrow chips: hide meta text, tighten padding. Title still ellipsises. */
+.card[data-narrow="true"] { padding-left: 6px; padding-right: 4px; }
+.card[data-narrow="true"][data-type="build"],
+.card[data-narrow="true"][data-type="data"],
+.card[data-narrow="true"][data-type="polish"] { padding-left: 8px; }
+.card[data-narrow="true"] .meta { display: none; }
+.card[data-narrow="true"] .title { font-size: 11px; }
 
 .resize {
   position: absolute; right: -4px; top: 0; bottom: 0;
@@ -670,6 +678,15 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+.duration-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: -8px;
+  padding: 0 2px;
+  letter-spacing: 0.2px;
+}
+.duration-hint.warn { color: #DC2626; font-weight: 600; }
+
 .modal-actions {
   display: flex; gap: 8px; justify-content: flex-end;
   margin-top: 16px; align-items: center;
@@ -917,10 +934,17 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
       <input type="text" id="fTitle" placeholder="What is this?" />
     </div>
 
-    <div class="field">
-      <label for="fDue">Due date</label>
-      <input type="date" id="fDue" />
+    <div class="field-row">
+      <div class="field">
+        <label for="fStartDate">Start</label>
+        <input type="date" id="fStartDate" />
+      </div>
+      <div class="field">
+        <label for="fEndDate">End</label>
+        <input type="date" id="fEndDate" />
+      </div>
     </div>
+    <div class="duration-hint" id="fDurationHint">14 days</div>
 
     <div class="field">
       <label>Status</label>
@@ -992,7 +1016,7 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","eyebrow":"Product · 2026","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"now","name":"Now","description":"Shipping this quarter.","color":"sage"},{"id":"next","name":"Next","description":"Up next, scoped.","color":"sky"},{"id":"later","name":"Later","description":"On the radar, not scoped.","color":"blush"}],"items":[]},"2027":{"granularity":"month","lanes":[],"items":[]}}},"engineering-sprint":{"roadbookVersion":2,"title":"Engineering Roadmap","eyebrow":"Now / Next / Later","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"frontend","name":"Frontend","description":"Web app, design system, perf.","color":"sky"},{"id":"backend","name":"Backend","description":"APIs, services, data.","color":"sage"},{"id":"infra","name":"Infra","description":"Deploy, observability, cost.","color":"stone"}],"items":[{"id":"fe1","laneId":"frontend","title":"Design system v2","start":1,"span":4,"row":0,"status":"funded","type":"polish","due":"","complete":30},{"id":"fe2","laneId":"frontend","title":"Bundle size budget","start":2,"span":2,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"fe3","laneId":"frontend","title":"Server components","start":7,"span":5,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be1","laneId":"backend","title":"GraphQL gateway","start":1,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be2","laneId":"backend","title":"Auth refactor","start":5,"span":2,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"be3","laneId":"backend","title":"Event bus (Kafka)","start":7,"span":4,"row":0,"status":"pending","type":"data","due":"","complete":0},{"id":"in1","laneId":"infra","title":"K8s cluster upgrade","start":1,"span":2,"row":0,"status":"funded","type":"build","due":"","complete":50},{"id":"in2","laneId":"infra","title":"Trace sampling tuning","start":4,"span":2,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"in3","laneId":"infra","title":"Cost rightsizing","start":5,"span":4,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"in4","laneId":"infra","title":"DR runbook","start":11,"span":2,"row":0,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"granularity":"month","lanes":[],"items":[]}}},"product-launch":{"roadbookVersion":2,"title":"Product Launch 2026","eyebrow":"Launch plan","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"discovery","name":"Discovery","description":"Research and validation before build.","color":"sky"},{"id":"build","name":"Build","description":"Engineering and core feature work.","color":"sage"},{"id":"beta","name":"Beta","description":"Early customers, feedback loops.","color":"lemon"},{"id":"launch","name":"Launch","description":"GA, marketing, scale.","color":"coral"}],"items":[{"id":"d1","laneId":"discovery","title":"Customer interviews","start":1,"span":2,"row":0,"status":"funded","type":"data","due":"","complete":40},{"id":"d2","laneId":"discovery","title":"Pricing research","start":2,"span":3,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"b1","laneId":"build","title":"Core MVP","start":4,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b2","laneId":"build","title":"Onboarding flow","start":7,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b3","laneId":"build","title":"Payments integration","start":8,"span":2,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"be1","laneId":"beta","title":"Closed beta (10 users)","start":8,"span":2,"row":0,"status":"soon","type":"polish","due":"","complete":0},{"id":"be2","laneId":"beta","title":"Open beta","start":10,"span":2,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"l1","laneId":"launch","title":"GA release","start":11,"span":2,"row":0,"status":"conditional","type":"build","due":"","complete":0}]},"2027":{"granularity":"month","lanes":[],"items":[]}}},"saas-quarterly":{"roadbookVersion":2,"title":"SaaS Roadmap 2026","eyebrow":"Product · Quarterly","activeYear":"2026","data":{"2026":{"granularity":"month","lanes":[{"id":"growth","name":"Growth","description":"Acquisition, activation, retention.","color":"mint"},{"id":"product","name":"Product","description":"Features customers will pay more for.","color":"lavender"},{"id":"platform","name":"Platform","description":"Reliability, scale, developer velocity.","color":"stone"}],"items":[{"id":"g1","laneId":"growth","title":"Self-serve signup","start":1,"span":2,"row":0,"status":"funded","type":"build","due":"","complete":60},{"id":"g2","laneId":"growth","title":"Referral program","start":4,"span":2,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"g3","laneId":"growth","title":"Lifecycle emails","start":4,"span":4,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"g4","laneId":"growth","title":"Pricing experiments","start":7,"span":5,"row":0,"status":"soon","type":"data","due":"","complete":0},{"id":"p1","laneId":"product","title":"Workspaces & teams","start":1,"span":4,"row":0,"status":"funded","type":"build","due":"","complete":25},{"id":"p2","laneId":"product","title":"Bulk import / export","start":4,"span":2,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"p3","laneId":"product","title":"API v2","start":7,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"p4","laneId":"product","title":"Mobile app","start":10,"span":3,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"x1","laneId":"platform","title":"Migrate to Postgres 16","start":1,"span":2,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"x2","laneId":"platform","title":"SSO / SAML","start":4,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x3","laneId":"platform","title":"Multi-region rollout","start":7,"span":4,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x4","laneId":"platform","title":"SOC2 audit","start":10,"span":3,"row":1,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"granularity":"month","lanes":[],"items":[]}}}};
+window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","eyebrow":"Product · 2026","activeYear":"2026","data":{"2026":{"granularity":"day","lanes":[{"id":"now","name":"Now","description":"Shipping this quarter.","color":"sage"},{"id":"next","name":"Next","description":"Up next, scoped.","color":"sky"},{"id":"later","name":"Later","description":"On the radar, not scoped.","color":"blush"}],"items":[]},"2027":{"granularity":"day","lanes":[],"items":[]}}},"engineering-sprint":{"roadbookVersion":3,"title":"Engineering Roadmap","eyebrow":"Now / Next / Later","activeYear":"2026","data":{"2026":{"granularity":"day","lanes":[{"id":"frontend","name":"Frontend","description":"Web app, design system, perf.","color":"sky"},{"id":"backend","name":"Backend","description":"APIs, services, data.","color":"sage"},{"id":"infra","name":"Infra","description":"Deploy, observability, cost.","color":"stone"}],"items":[{"id":"fe1","laneId":"frontend","title":"Design system v2","startDate":"2026-01-05","endDate":"2026-04-24","row":0,"status":"funded","type":"polish","complete":30},{"id":"fe2","laneId":"frontend","title":"Bundle size budget","startDate":"2026-02-09","endDate":"2026-03-13","row":1,"status":"planned","type":"polish","complete":0},{"id":"fe3","laneId":"frontend","title":"Server components","startDate":"2026-07-06","endDate":"2026-11-13","row":0,"status":"planned","type":"build","complete":0},{"id":"be1","laneId":"backend","title":"GraphQL gateway","startDate":"2026-01-12","endDate":"2026-04-17","row":0,"status":"planned","type":"build","complete":0},{"id":"be2","laneId":"backend","title":"Auth refactor","startDate":"2026-05-04","endDate":"2026-06-12","row":1,"status":"planned","type":"build","complete":0},{"id":"be3","laneId":"backend","title":"Event bus (Kafka)","startDate":"2026-07-06","endDate":"2026-10-09","row":0,"status":"pending","type":"data","complete":0},{"id":"in1","laneId":"infra","title":"K8s cluster upgrade","startDate":"2026-01-05","endDate":"2026-02-06","row":0,"status":"funded","type":"build","complete":50},{"id":"in2","laneId":"infra","title":"Trace sampling tuning","startDate":"2026-04-06","endDate":"2026-05-08","row":0,"status":"planned","type":"data","complete":0},{"id":"in3","laneId":"infra","title":"Cost rightsizing","startDate":"2026-05-04","endDate":"2026-08-14","row":1,"status":"planned","type":"polish","complete":0},{"id":"in4","laneId":"infra","title":"DR runbook","startDate":"2026-11-09","endDate":"2026-12-11","row":0,"status":"conditional","type":"polish","complete":0}]},"2027":{"granularity":"day","lanes":[],"items":[]}}},"product-launch":{"roadbookVersion":3,"title":"Product Launch 2026","eyebrow":"Launch plan","activeYear":"2026","data":{"2026":{"granularity":"day","lanes":[{"id":"discovery","name":"Discovery","description":"Research and validation before build.","color":"sky"},{"id":"build","name":"Build","description":"Engineering and core feature work.","color":"sage"},{"id":"beta","name":"Beta","description":"Early customers, feedback loops.","color":"lemon"},{"id":"launch","name":"Launch","description":"GA, marketing, scale.","color":"coral"}],"items":[{"id":"d1","laneId":"discovery","title":"Customer interviews","startDate":"2026-01-05","endDate":"2026-02-13","row":0,"status":"funded","type":"data","complete":40},{"id":"d2","laneId":"discovery","title":"Pricing research","startDate":"2026-02-09","endDate":"2026-04-17","row":1,"status":"planned","type":"data","complete":0},{"id":"b1","laneId":"build","title":"Core MVP","startDate":"2026-03-30","endDate":"2026-07-24","row":0,"status":"planned","type":"build","complete":0},{"id":"b2","laneId":"build","title":"Onboarding flow","startDate":"2026-07-27","endDate":"2026-09-04","row":0,"status":"planned","type":"build","complete":0},{"id":"b3","laneId":"build","title":"Payments integration","startDate":"2026-08-03","endDate":"2026-09-25","row":1,"status":"pending","type":"build","complete":0},{"id":"be1","laneId":"beta","title":"Closed beta (10 users)","startDate":"2026-08-17","endDate":"2026-09-25","row":0,"status":"soon","type":"polish","complete":0},{"id":"be2","laneId":"beta","title":"Open beta","startDate":"2026-09-28","endDate":"2026-11-06","row":0,"status":"planned","type":"polish","complete":0},{"id":"l1","laneId":"launch","title":"GA release","startDate":"2026-11-09","endDate":"2026-12-04","row":0,"status":"conditional","type":"build","complete":0}]},"2027":{"granularity":"day","lanes":[],"items":[]}}},"saas-quarterly":{"roadbookVersion":3,"title":"SaaS Roadmap 2026","eyebrow":"Product · Quarterly","activeYear":"2026","data":{"2026":{"granularity":"day","lanes":[{"id":"growth","name":"Growth","description":"Acquisition, activation, retention.","color":"mint"},{"id":"product","name":"Product","description":"Features customers will pay more for.","color":"lavender"},{"id":"platform","name":"Platform","description":"Reliability, scale, developer velocity.","color":"stone"}],"items":[{"id":"g1","laneId":"growth","title":"Self-serve signup","startDate":"2026-01-05","endDate":"2026-02-27","row":0,"status":"funded","type":"build","complete":60},{"id":"g2","laneId":"growth","title":"Referral program","startDate":"2026-04-06","endDate":"2026-05-29","row":0,"status":"planned","type":"polish","complete":0},{"id":"g3","laneId":"growth","title":"Lifecycle emails","startDate":"2026-04-06","endDate":"2026-07-24","row":1,"status":"planned","type":"data","complete":0},{"id":"g4","laneId":"growth","title":"Pricing experiments","startDate":"2026-07-06","endDate":"2026-11-13","row":0,"status":"soon","type":"data","complete":0},{"id":"p1","laneId":"product","title":"Workspaces & teams","startDate":"2026-01-12","endDate":"2026-04-24","row":0,"status":"funded","type":"build","complete":25},{"id":"p2","laneId":"product","title":"Bulk import / export","startDate":"2026-04-13","endDate":"2026-05-22","row":1,"status":"planned","type":"build","complete":0},{"id":"p3","laneId":"product","title":"API v2","startDate":"2026-07-06","endDate":"2026-10-23","row":0,"status":"planned","type":"build","complete":0},{"id":"p4","laneId":"product","title":"Mobile app","startDate":"2026-10-05","endDate":"2026-12-25","row":1,"status":"pending","type":"build","complete":0},{"id":"x1","laneId":"platform","title":"Migrate to Postgres 16","startDate":"2026-01-05","endDate":"2026-02-13","row":0,"status":"planned","type":"data","complete":0},{"id":"x2","laneId":"platform","title":"SSO / SAML","startDate":"2026-04-06","endDate":"2026-05-15","row":0,"status":"planned","type":"build","complete":0},{"id":"x3","laneId":"platform","title":"Multi-region rollout","startDate":"2026-07-06","endDate":"2026-10-23","row":0,"status":"planned","type":"build","complete":0},{"id":"x4","laneId":"platform","title":"SOC2 audit","startDate":"2026-10-05","endDate":"2026-12-25","row":1,"status":"conditional","type":"polish","complete":0}]},"2027":{"granularity":"day","lanes":[],"items":[]}}}};
 </script>
 <script>
 // state.js — store, persistence, history (undo/redo)
@@ -1004,8 +1028,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
   const META_KEY = `${PREFIX}-meta`;
   const YEAR_KEY = `${PREFIX}-active-year`;
   const LAYOUT_KEY = (y) => `${PREFIX}-layout-${y}`;
-  const SCHEMA_VERSION = 2; // v2 = month granularity (1-12)
+  const SCHEMA_VERSION = 3; // v3 = day-precise (startDate/endDate ISO), 14-day drag snap
   const HISTORY_LIMIT = 50;
+  const SNAP_DAYS = 14;
 
   const PALETTE = [
     "cream", "sage", "blush", "mint", "peach", "rose",
@@ -1040,6 +1065,73 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
 
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
+  // ---------- Date utilities ----------
+  function isLeap(year) {
+    const y = parseInt(year, 10);
+    return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  }
+  function daysInYear(year) {
+    return isLeap(year) ? 366 : 365;
+  }
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+  function isoFromYMD(y, m, d) { return `${y}-${pad2(m)}-${pad2(d)}`; }
+  function parseIso(iso) {
+    if (typeof iso !== "string") return null;
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+  function isoToDate(iso) { return parseIso(iso); }
+  function dateToIso(d) {
+    return isoFromYMD(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+  function addDaysIso(iso, n) {
+    const d = parseIso(iso);
+    if (!d) return iso;
+    d.setUTCDate(d.getUTCDate() + n);
+    return dateToIso(d);
+  }
+  function dayOfYear(iso) {
+    const d = parseIso(iso);
+    if (!d) return 1;
+    const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.floor((d - start) / 86400000) + 1;
+  }
+  function lastDayOfMonth(year, monthIndex0) {
+    return new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
+  }
+  function diffDays(isoA, isoB) {
+    const a = parseIso(isoA), b = parseIso(isoB);
+    if (!a || !b) return 0;
+    return Math.round((b - a) / 86400000);
+  }
+  function clampToYear(iso, year) {
+    const d = parseIso(iso);
+    if (!d) return isoFromYMD(year, 1, 1);
+    const y = d.getUTCFullYear();
+    if (y < year) return isoFromYMD(year, 1, 1);
+    if (y > year) return isoFromYMD(year, 12, 31);
+    return iso;
+  }
+  // Snap an ISO date to the nearest SNAP_DAYS boundary measured from Jan 1 of that year
+  function snapToBiweek(iso, year) {
+    const day = dayOfYear(iso) - 1; // 0-based
+    const snapped = Math.round(day / SNAP_DAYS) * SNAP_DAYS;
+    const yearStart = new Date(Date.UTC(year, 0, 1));
+    yearStart.setUTCDate(yearStart.getUTCDate() + snapped);
+    return dateToIso(yearStart);
+  }
+  // Snap end date relative to start so duration is a multiple of SNAP_DAYS
+  function snapDurationFromStart(startIso, endIso) {
+    const startDay = dayOfYear(startIso);
+    const endDay = dayOfYear(endIso);
+    let duration = endDay - startDay + 1; // inclusive days
+    duration = Math.max(SNAP_DAYS, Math.round(duration / SNAP_DAYS) * SNAP_DAYS);
+    return addDaysIso(startIso, duration - 1);
+  }
+
   function load() {
     try {
       const metaRaw = localStorage.getItem(META_KEY);
@@ -1057,7 +1149,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
-            store.data[y] = normalizeYear(parsed);
+            store.data[y] = normalizeYear(parsed, y);
           } catch (_) {
             store.data[y] = { lanes: [], items: [] };
           }
@@ -1077,8 +1169,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     snapshot();
   }
 
-  function normalizeYear(y) {
-    const out = { granularity: "month", lanes: [], items: [] };
+  function normalizeYear(y, yearLabel) {
+    const year = parseInt(yearLabel, 10) || 2026;
+    const out = { granularity: "day", lanes: [], items: [] };
     if (y && Array.isArray(y.lanes)) {
       out.lanes = y.lanes.map((l, i) => ({
         id: l.id || `lane-${i}-${Math.random().toString(36).slice(2, 7)}`,
@@ -1087,39 +1180,66 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
         color: PALETTE.includes(l.color) ? l.color : PALETTE[i % PALETTE.length]
       }));
     }
-    // Decide whether to migrate quarter → month units.
-    // Trigger: granularity missing/quarter, OR all items fit start≤4 && span≤4 (legacy v1 data).
-    const explicitlyQuarter = y && (y.granularity === "quarter" || y.granularity === undefined);
-    const looksLikeQuarterData = y && Array.isArray(y.items) && y.items.length > 0
+
+    if (!y || !Array.isArray(y.items)) return out;
+
+    // Detect schema and migrate.
+    // v3 (day): granularity === "day" OR items have startDate/endDate
+    // v2 (month): granularity === "month" OR items have start in 1-12, span in 1-12
+    // v1 (quarter): items have start/span in 1-4
+    const firstItem = y.items[0] || {};
+    const isV3 = y.granularity === "day" || (firstItem.startDate && firstItem.endDate);
+    const explicitV2 = y.granularity === "month";
+    const looksLikeV2 = !isV3 && !explicitV2 && y.items.length > 0
+      && y.items.every((it) => {
+        const s = parseInt(it.start, 10) || 1;
+        const sp = parseInt(it.span, 10) || 1;
+        return s >= 1 && s <= 12 && sp >= 1 && sp <= 12 && s + sp - 1 <= 12;
+      });
+    const explicitV1 = y.granularity === "quarter";
+    const looksLikeV1 = !isV3 && !explicitV2 && !looksLikeV2 && y.items.length > 0
       && y.items.every((it) => {
         const s = parseInt(it.start, 10) || 1;
         const sp = parseInt(it.span, 10) || 1;
         return s >= 1 && s <= 4 && sp >= 1 && sp <= 4 && s + sp - 1 <= 4;
       });
-    const migrate = y && y.granularity !== "month" && (explicitlyQuarter || looksLikeQuarterData);
 
-    if (y && Array.isArray(y.items)) {
-      out.items = y.items.map((it, i) => {
-        let start = parseInt(it.start, 10) || 1;
+    out.items = y.items.map((it, i) => {
+      let startDate, endDate;
+      if (isV3) {
+        startDate = typeof it.startDate === "string" ? it.startDate : isoFromYMD(year, 1, 1);
+        endDate = typeof it.endDate === "string" ? it.endDate : addDaysIso(startDate, SNAP_DAYS - 1);
+      } else {
+        let startMonth = parseInt(it.start, 10) || 1;
         let span = parseInt(it.span, 10) || 1;
-        if (migrate) {
-          start = (start - 1) * 3 + 1;
+        if (explicitV1 || looksLikeV1) {
+          startMonth = (startMonth - 1) * 3 + 1;
           span = span * 3;
         }
-        return {
-          id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
-          laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
-          title: String(it.title || "Untitled"),
-          start: clamp(start, 1, 12),
-          span: clamp(span, 1, 12),
-          row: Math.max(0, parseInt(it.row, 10) || 0),
-          status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
-          type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
-          due: typeof it.due === "string" ? it.due : "",
-          complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
-        };
-      });
-    }
+        startMonth = clamp(startMonth, 1, 12);
+        span = clamp(span, 1, 13 - startMonth);
+        const endMonth = startMonth + span - 1;
+        startDate = isoFromYMD(year, startMonth, 1);
+        endDate = isoFromYMD(year, endMonth, lastDayOfMonth(year, endMonth - 1));
+      }
+
+      // Clamp to active year boundaries (v0.3 — cross-year items not supported)
+      startDate = clampToYear(startDate, year);
+      endDate = clampToYear(endDate, year);
+      if (diffDays(startDate, endDate) < 0) endDate = startDate;
+
+      return {
+        id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
+        laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
+        title: String(it.title || "Untitled"),
+        startDate,
+        endDate,
+        row: Math.max(0, parseInt(it.row, 10) || 0),
+        status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
+        type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
+        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
+      };
+    });
     return out;
   }
 
@@ -1243,7 +1363,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
       }
       if (payload.data) {
         ["2026", "2027"].forEach((y) => {
-          if (payload.data[y]) store.data[y] = normalizeYear(payload.data[y]);
+          if (payload.data[y]) store.data[y] = normalizeYear(payload.data[y], y);
         });
       }
     });
@@ -1268,6 +1388,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
   window.Roadbook.state = {
     PALETTE,
     SCHEMA_VERSION,
+    SNAP_DAYS,
     load,
     persist,
     snapshot,
@@ -1291,15 +1412,31 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     uid,
     get: () => store
   };
+  window.Roadbook.dates = {
+    SNAP_DAYS,
+    isLeap,
+    daysInYear,
+    isoFromYMD,
+    parseIso,
+    dateToIso,
+    addDaysIso,
+    dayOfYear,
+    lastDayOfMonth,
+    diffDays,
+    clampToYear,
+    snapToBiweek,
+    snapDurationFromStart
+  };
 })();
 
 
-// drag.js — pointer-event drag, drop, resize (works for mouse + touch)
+// drag.js — pointer-event drag, drop, resize.
+// Drag/resize snap to 14-day boundaries from Jan 1 of the active year.
+// Move preserves duration; resize changes endDate only.
 (function () {
   const ROW_H = 34;
-  const COLS = 12; // months
 
-  let dragState = null; // { id, pointerId, originLane, originStart, originSpan, originRow, mode: 'move'|'resize' }
+  let dragState = null;
 
   function attachCard(card) {
     card.addEventListener("pointerdown", onPointerDown);
@@ -1307,6 +1444,14 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     if (handle) handle.addEventListener("pointerdown", onResizeStart);
   }
 
+  function activeYearInt() {
+    return parseInt(window.Roadbook.state.get().activeYear, 10) || 2026;
+  }
+  function yearDays() {
+    return window.Roadbook.dates.daysInYear(activeYearInt());
+  }
+
+  // ---------- Resize ----------
   function onResizeStart(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -1314,19 +1459,17 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     if (!card) return;
     const body = card.closest(".lane-body");
     const rect = body.getBoundingClientRect();
-    const colW = rect.width / COLS;
     const item = window.Roadbook.state.findItem(card.dataset.id);
     if (!item) return;
 
     card.setPointerCapture(e.pointerId);
-
     dragState = {
       mode: "resize",
       id: card.dataset.id,
       pointerId: e.pointerId,
       startX: e.clientX,
-      colW,
-      initialSpan: item.span,
+      bodyRect: rect,
+      initialEnd: item.endDate,
       card
     };
     card.classList.add("selected");
@@ -1340,12 +1483,27 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     if (!dragState || dragState.mode !== "resize") return;
     const item = window.Roadbook.state.findItem(dragState.id);
     if (!item) return;
+    const year = activeYearInt();
+    const dates = window.Roadbook.dates;
+    const totalDays = yearDays();
     const dx = e.clientX - dragState.startX;
-    const dSpan = Math.round(dx / dragState.colW);
-    const newSpan = Math.max(1, Math.min(COLS + 1 - item.start, dragState.initialSpan + dSpan));
-    if (newSpan !== item.span) {
-      window.Roadbook.state.commitSilent(() => { item.span = newSpan; });
-      dragState.card.style.setProperty("--span", newSpan);
+    const daysDelta = Math.round((dx / dragState.bodyRect.width) * totalDays);
+    let newEnd = dates.addDaysIso(dragState.initialEnd, daysDelta);
+    // Snap end to 14-day grid (aligned to start)
+    const startDay = dates.dayOfYear(item.startDate);
+    let endDay = dates.dayOfYear(newEnd);
+    const minEndDay = startDay + dates.SNAP_DAYS - 1;
+    if (endDay < minEndDay) endDay = minEndDay;
+    // Quantize span to multiples of SNAP_DAYS
+    const span = endDay - startDay + 1;
+    const snappedSpan = Math.max(dates.SNAP_DAYS, Math.round(span / dates.SNAP_DAYS) * dates.SNAP_DAYS);
+    endDay = Math.min(totalDays, startDay + snappedSpan - 1);
+    newEnd = dates.isoFromYMD(year, 1, 1);
+    newEnd = dates.addDaysIso(newEnd, endDay - 1);
+
+    if (newEnd !== item.endDate) {
+      window.Roadbook.state.commitSilent(() => { item.endDate = newEnd; });
+      window.Roadbook.app.updateCardDom(item);
     }
   }
 
@@ -1355,11 +1513,11 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     e.currentTarget.removeEventListener("pointermove", onResizeMove);
     e.currentTarget.removeEventListener("pointerup", onResizeEnd);
     e.currentTarget.removeEventListener("pointercancel", onResizeEnd);
-    // Push a single history entry for the whole resize
     window.Roadbook.state.snapshot();
     dragState = null;
   }
 
+  // ---------- Move ----------
   function onPointerDown(e) {
     if (e.target.classList && e.target.classList.contains("resize")) return;
     if (e.button !== 0 && e.button !== undefined && e.pointerType === "mouse") return;
@@ -1370,19 +1528,18 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
 
     const body = card.closest(".lane-body");
     const startRect = body.getBoundingClientRect();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let moved = false;
 
     dragState = {
       mode: "move",
       id,
       pointerId: e.pointerId,
-      startX, startY,
+      startX: e.clientX,
+      startY: e.clientY,
+      bodyRect: startRect,
+      originStart: item.startDate,
+      originEnd: item.endDate,
       originLane: item.laneId,
-      originStart: item.start,
       originRow: item.row,
-      colW: startRect.width / COLS,
       card
     };
 
@@ -1403,19 +1560,38 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
       dragState.card.classList.add("dragging");
     }
 
-    // Detect the lane currently under the pointer
     const laneEl = elementLaneBodyAt(e.clientX, e.clientY);
     if (!laneEl) return;
     const rect = laneEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const dates = window.Roadbook.dates;
+    const year = activeYearInt();
+    const totalDays = yearDays();
     const item = window.Roadbook.state.findItem(dragState.id);
     if (!item) return;
-    const month = Math.max(1, Math.min(COLS, Math.floor(x / (rect.width / COLS)) + 1));
+    const span = dates.diffDays(dragState.originStart, dragState.originEnd); // inclusive count = span+1 days
+
+    // Determine new startDate from x position
+    const xInLane = e.clientX - rect.left;
+    let dayIndex = Math.floor((xInLane / rect.width) * totalDays);
+    if (dayIndex < 0) dayIndex = 0;
+    // Snap to nearest 14-day boundary
+    const snapped = Math.round(dayIndex / dates.SNAP_DAYS) * dates.SNAP_DAYS;
+    let newStartDay = Math.min(totalDays - span - 1, Math.max(0, snapped));
+    let newStartDate = dates.isoFromYMD(year, 1, 1);
+    newStartDate = dates.addDaysIso(newStartDate, newStartDay);
+    const newEndDate = dates.addDaysIso(newStartDate, span);
+
+    // Row
+    const y = e.clientY - rect.top;
     const row = Math.max(0, Math.floor(y / ROW_H));
-    const start = Math.max(1, Math.min(month, COLS + 1 - item.span));
-    showGhost(laneEl, start, item.span, row);
-    dragState.dropTarget = { laneId: laneEl.dataset.lane, start, row };
+
+    showGhost(laneEl, newStartDate, newEndDate, row);
+    dragState.dropTarget = {
+      laneId: laneEl.dataset.lane,
+      startDate: newStartDate,
+      endDate: newEndDate,
+      row
+    };
   }
 
   function onPointerUp(e) {
@@ -1432,7 +1608,6 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     hideGhosts();
 
     if (!dragging) {
-      // Treat as click
       dragState = null;
       window.Roadbook.modal.open(card.dataset.id);
       return;
@@ -1442,10 +1617,16 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
       const item = window.Roadbook.state.findItem(dragState.id);
       if (item) {
         const oldLane = item.laneId;
-        const changed = (item.start !== drop.start || item.row !== drop.row || item.laneId !== drop.laneId);
+        const changed = (
+          item.startDate !== drop.startDate ||
+          item.endDate !== drop.endDate ||
+          item.row !== drop.row ||
+          item.laneId !== drop.laneId
+        );
         if (changed) {
           window.Roadbook.state.commit(() => {
-            item.start = drop.start;
+            item.startDate = drop.startDate;
+            item.endDate = drop.endDate;
             item.row = drop.row;
             item.laneId = drop.laneId;
           });
@@ -1464,12 +1645,17 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     return stack.find((el) => el.classList && el.classList.contains("lane-body")) || null;
   }
 
-  function showGhost(body, start, span, row) {
+  function showGhost(body, startDate, endDate, row) {
     document.querySelectorAll(".ghost").forEach((g) => g.classList.remove("show"));
     const g = body.querySelector(".ghost");
     if (!g) return;
-    g.style.left = `calc((${start} - 1) * (100% / ${COLS}))`;
-    g.style.width = `calc(${span} * (100% / ${COLS}) - 6px)`;
+    const dates = window.Roadbook.dates;
+    const totalDays = yearDays();
+    const startDay = dates.dayOfYear(startDate);
+    const endDay = dates.dayOfYear(endDate);
+    const spanDays = endDay - startDay + 1;
+    g.style.left = `calc((${startDay} - 1) * (100% / ${totalDays}))`;
+    g.style.width = `calc(${spanDays} * (100% / ${totalDays}) - 6px)`;
     g.style.top = `${row * ROW_H}px`;
     g.classList.add("show");
   }
@@ -1508,6 +1694,28 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     if (slider) slider.style.setProperty("--slider-fill", value + "%");
   }
 
+  function updateDurationHint() {
+    const start = document.getElementById("fStartDate").value;
+    const end = document.getElementById("fEndDate").value;
+    const dates = window.Roadbook.dates;
+    if (!start || !end) {
+      document.getElementById("fDurationHint").textContent = "—";
+      return;
+    }
+    const days = dates.diffDays(start, end) + 1;
+    if (days < 1) {
+      document.getElementById("fDurationHint").textContent = "End is before start";
+      document.getElementById("fDurationHint").classList.add("warn");
+      return;
+    }
+    document.getElementById("fDurationHint").classList.remove("warn");
+    const weeks = Math.round(days / 7 * 10) / 10;
+    document.getElementById("fDurationHint").textContent =
+      days === 1 ? "1 day" :
+      days < 14 ? `${days} days` :
+      `${days} days · ${weeks} weeks`;
+  }
+
   function open(itemId) {
     const item = window.Roadbook.state.findItem(itemId);
     if (!item) return;
@@ -1515,7 +1723,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     prevFocus = document.activeElement;
 
     document.getElementById("fTitle").value = item.title;
-    document.getElementById("fDue").value = item.due || "";
+    document.getElementById("fStartDate").value = item.startDate || "";
+    document.getElementById("fEndDate").value = item.endDate || "";
+    updateDurationHint();
     setChipGroup("fStatusGroup", item.status || "planned");
     setChipGroup("fTypeGroup", item.type || "other");
     const complete = item.complete || 0;
@@ -1540,9 +1750,15 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     if (!editingId) return;
     const item = window.Roadbook.state.findItem(editingId);
     if (!item) return;
+    const dates = window.Roadbook.dates;
+    let startDate = document.getElementById("fStartDate").value || item.startDate;
+    let endDate = document.getElementById("fEndDate").value || item.endDate;
+    // Auto-clamp: end must be >= start
+    if (dates.diffDays(startDate, endDate) < 0) endDate = startDate;
     const next = {
       title: document.getElementById("fTitle").value.trim() || item.title,
-      due: document.getElementById("fDue").value,
+      startDate,
+      endDate,
       status: getChipGroupValue("fStatusGroup", "planned"),
       type: getChipGroupValue("fTypeGroup", "other"),
       complete: parseInt(document.getElementById("fComplete").value, 10) || 0
@@ -1610,6 +1826,10 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     });
     document.getElementById("fTitle").addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); save(); }
+    });
+    ["fStartDate", "fEndDate"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("input", updateDurationHint);
     });
 
     // Chip-group click handlers
@@ -1700,6 +1920,10 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     const MONTH_W = GRID_W / COLS;
     const HEADER_H = 96;
     const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const dates = window.Roadbook.dates;
+    const yearInt = parseInt(year, 10);
+    const YEAR_DAYS = dates.daysInYear(yearInt);
+    const DAY_W = GRID_W / YEAR_DAYS;
 
     const styleVar = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
     const text = styleVar("--text") || "#0A0A0A";
@@ -1781,10 +2005,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
         out.push(`<line x1="${x}" y1="${cursorY + 8}" x2="${x}" y2="${cursorY + lh - 8}" stroke="${isQ ? styleVar("--border-strong") || "#D1D5DB" : border}" stroke-width="${isQ ? 0.7 : 0.4}" opacity="${isQ ? 0.7 : 0.45}"/>`);
       }
 
-      // Items
+      // Items (positioned by day-of-year)
       data.items.filter((it) => it.laneId === lane.id).forEach((it) => {
-        const x = GRID_X + (it.start - 1) * MONTH_W;
-        const w = it.span * MONTH_W - 6;
+        const startDay = dates.dayOfYear(it.startDate);
+        const endDay = dates.dayOfYear(it.endDate);
+        const spanDays = Math.max(1, endDay - startDay + 1);
+        const x = GRID_X + (startDay - 1) * DAY_W;
+        const w = Math.max(8, spanDays * DAY_W - 6);
         const y = cursorY + 16 + it.row * ROW_H;
         const h = 30;
         // Card body
@@ -2036,7 +2263,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
 // app.js — main entry: render lanes/cards, wire top controls, keyboard nav
 (function () {
   const ROW_H = 34;
-  const COLS = 12; // months
+  const NARROW_DAYS = 90; // below ~3 months, hide meta so title gets the room
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
@@ -2068,6 +2295,11 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
 
     const container = document.getElementById("lanes");
     container.innerHTML = "";
+    // Set --year-days for date-based card positioning
+    const yearInt = parseInt(s.activeYear, 10) || 2026;
+    const yearDays = window.Roadbook.dates.daysInYear(yearInt);
+    container.style.setProperty("--year-days", yearDays);
+
     const y = window.Roadbook.state.currentYear();
     y.lanes.forEach((lane) => container.appendChild(renderLane(lane)));
     y.items.forEach((item) => placeItem(item));
@@ -2132,6 +2364,14 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     });
   }
 
+  function spanInfo(item) {
+    const dates = window.Roadbook.dates;
+    const startDay = dates.dayOfYear(item.startDate);
+    const endDay = dates.dayOfYear(item.endDate);
+    const spanDays = Math.max(1, endDay - startDay + 1);
+    return { startDay, endDay, spanDays };
+  }
+
   function placeItem(item) {
     const body = document.querySelector(`.lane-body[data-lane="${item.laneId}"]`);
     if (!body) return null;
@@ -2143,11 +2383,14 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     card.dataset.status = item.status || "planned";
     card.dataset.type = item.type || "other";
     card.dataset.complete = String(item.complete || 0);
-    card.style.setProperty("--start", item.start);
-    card.style.setProperty("--span", item.span);
+    const { startDay, spanDays } = spanInfo(item);
+    card.style.setProperty("--start-day", startDay);
+    card.style.setProperty("--span-days", spanDays);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
+    if (spanDays < NARROW_DAYS) card.dataset.narrow = "true";
+    card.setAttribute("aria-label",
+      `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.innerHTML = `
       <div class="fill"></div>
       <span class="dot" aria-hidden="true"></span>
@@ -2165,7 +2408,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
   function renderMeta(item) {
     const parts = [];
     if (item.complete && item.complete > 0) parts.push(`<span class="pct">${item.complete}%</span>`);
-    if (item.due) parts.push(escapeHtml(fmtDate(item.due)));
+    if (item.endDate) parts.push(escapeHtml(fmtDate(item.endDate)));
     return parts.join(" · ");
   }
 
@@ -2175,11 +2418,15 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     card.dataset.status = item.status;
     card.dataset.type = item.type;
     card.dataset.complete = String(item.complete || 0);
-    card.style.setProperty("--start", item.start);
-    card.style.setProperty("--span", item.span);
+    const { startDay, spanDays } = spanInfo(item);
+    card.style.setProperty("--start-day", startDay);
+    card.style.setProperty("--span-days", spanDays);
     card.style.setProperty("--row", item.row);
     card.style.setProperty("--complete", item.complete || 0);
-    card.setAttribute("aria-label", `${item.title}, ${item.status}, month ${item.start}, span ${item.span}`);
+    if (spanDays < NARROW_DAYS) card.dataset.narrow = "true";
+    else delete card.dataset.narrow;
+    card.setAttribute("aria-label",
+      `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
   }
@@ -2202,19 +2449,23 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
   // ---------- Mutations ----------
   function addItem(laneId) {
     const id = window.Roadbook.state.uid("it");
+    const dates = window.Roadbook.dates;
+    const yearInt = parseInt(window.Roadbook.state.get().activeYear, 10) || 2026;
+    const startDate = dates.isoFromYMD(yearInt, 1, 1);
+    const endDate = dates.addDaysIso(startDate, dates.SNAP_DAYS - 1); // 2 weeks default
     let r = 0;
     window.Roadbook.state.commit(() => {
       const rowsUsed = window.Roadbook.state.currentYear().items
-        .filter((i) => i.laneId === laneId && i.start === 1)
+        .filter((i) => i.laneId === laneId && i.startDate === startDate)
         .map((i) => i.row);
       while (rowsUsed.includes(r)) r++;
       window.Roadbook.state.currentYear().items.push({
         id, laneId,
         title: "New item",
-        start: 1, span: 3, row: r, // default to one quarter (3 months)
+        startDate, endDate,
+        row: r,
         status: "planned",
         type: "other",
-        due: "",
         complete: 0
       });
     });
@@ -2338,19 +2589,37 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
     if (!arrows.includes(e.key)) return;
     e.preventDefault();
 
+    const dates = window.Roadbook.dates;
+    const yearInt = parseInt(window.Roadbook.state.get().activeYear, 10) || 2026;
+    const totalDays = dates.daysInYear(yearInt);
+    const SNAP = dates.SNAP_DAYS;
+    const startDay = dates.dayOfYear(item.startDate);
+    const endDay = dates.dayOfYear(item.endDate);
+    const spanDays = endDay - startDay + 1;
+
     if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-      const delta = e.key === "ArrowRight" ? 1 : -1;
-      const newSpan = Math.max(1, Math.min(COLS + 1 - item.start, item.span + delta));
-      if (newSpan !== item.span) {
-        window.Roadbook.state.commit(() => { item.span = newSpan; });
+      // Resize: change endDate by ±14 days
+      const delta = e.key === "ArrowRight" ? SNAP : -SNAP;
+      let newSpan = Math.max(SNAP, spanDays + delta);
+      newSpan = Math.min(totalDays - startDay + 1, newSpan);
+      const newEnd = dates.addDaysIso(item.startDate, newSpan - 1);
+      if (newEnd !== item.endDate) {
+        window.Roadbook.state.commit(() => { item.endDate = newEnd; });
         updateCardDom(item);
       }
       return;
     }
 
-    let { start, row, laneId } = item;
-    if (e.key === "ArrowLeft") start = Math.max(1, start - 1);
-    if (e.key === "ArrowRight") start = Math.min(COLS + 1 - item.span, start + 1);
+    let newStart = item.startDate;
+    let row = item.row;
+    let laneId = item.laneId;
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      const delta = e.key === "ArrowRight" ? SNAP : -SNAP;
+      let nextStartDay = startDay - 1 + delta; // 0-based
+      nextStartDay = Math.max(0, Math.min(totalDays - spanDays, nextStartDay));
+      newStart = dates.addDaysIso(dates.isoFromYMD(yearInt, 1, 1), nextStartDay);
+    }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       const y = window.Roadbook.state.currentYear();
       const idx = y.lanes.findIndex((l) => l.id === laneId);
@@ -2358,19 +2627,19 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":2,"title":"Roadbook","ey
         row -= 1;
       } else if (e.key === "ArrowUp" && idx > 0) {
         laneId = y.lanes[idx - 1].id;
-      } else if (e.key === "ArrowDown") {
-        // Within current lane: bump row; if at the (visual) bottom, move to next lane.
-        if (idx < y.lanes.length - 1) {
-          // Heuristic: holding ArrowDown moves between lanes when row 0 in next lane is free
-          row += 1;
-        }
+      } else if (e.key === "ArrowDown" && idx < y.lanes.length - 1) {
+        row += 1;
       }
     }
 
     const oldLane = item.laneId;
-    if (start !== item.start || row !== item.row || laneId !== item.laneId) {
+    const changed = newStart !== item.startDate || row !== item.row || laneId !== item.laneId;
+    if (changed) {
       window.Roadbook.state.commit(() => {
-        item.start = start;
+        if (newStart !== item.startDate) {
+          item.endDate = dates.addDaysIso(newStart, spanDays - 1);
+          item.startDate = newStart;
+        }
         item.row = row;
         item.laneId = laneId;
       });

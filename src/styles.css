@@ -391,8 +391,8 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 /* ---------- 7. Cards ---------- */
 .card {
   position: absolute;
-  left: calc((var(--start, 1) - 1) * (100% / 12));
-  width: calc(var(--span, 1) * (100% / 12) - var(--row-gap));
+  left: calc((var(--start-day, 1) - 1) * (100% / var(--year-days, 365)));
+  width: calc(var(--span-days, 14) * (100% / var(--year-days, 365)) - var(--row-gap));
   top: calc(var(--row, 0) * var(--row-h));
   height: var(--pill-h);
   background-color: var(--pill-bg);
@@ -466,6 +466,14 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   display: inline-flex; gap: 6px;
 }
 .card .meta .pct { color: var(--fill-pct-text); font-weight: 600; }
+
+/* Narrow chips: hide meta text, tighten padding. Title still ellipsises. */
+.card[data-narrow="true"] { padding-left: 6px; padding-right: 4px; }
+.card[data-narrow="true"][data-type="build"],
+.card[data-narrow="true"][data-type="data"],
+.card[data-narrow="true"][data-type="polish"] { padding-left: 8px; }
+.card[data-narrow="true"] .meta { display: none; }
+.card[data-narrow="true"] .title { font-size: 11px; }
 
 .resize {
   position: absolute; right: -4px; top: 0; bottom: 0;
@@ -660,6 +668,15 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+.duration-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: -8px;
+  padding: 0 2px;
+  letter-spacing: 0.2px;
+}
+.duration-hint.warn { color: #DC2626; font-weight: 600; }
+
 .modal-actions {
   display: flex; gap: 8px; justify-content: flex-end;
   margin-top: 16px; align-items: center;

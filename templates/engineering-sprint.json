@@ -1,29 +1,29 @@
 {
-  "roadbookVersion": 2,
+  "roadbookVersion": 3,
   "title": "Engineering Roadmap",
   "eyebrow": "Now / Next / Later",
   "activeYear": "2026",
   "data": {
     "2026": {
-      "granularity": "month",
+      "granularity": "day",
       "lanes": [
         { "id": "frontend", "name": "Frontend", "description": "Web app, design system, perf.", "color": "sky" },
         { "id": "backend",  "name": "Backend",  "description": "APIs, services, data.",         "color": "sage" },
         { "id": "infra",    "name": "Infra",    "description": "Deploy, observability, cost.",  "color": "stone" }
       ],
       "items": [
-        { "id": "fe1", "laneId": "frontend", "title": "Design system v2",        "start": 1,  "span": 4, "row": 0, "status": "funded",  "type": "polish", "due": "", "complete": 30 },
-        { "id": "fe2", "laneId": "frontend", "title": "Bundle size budget",      "start": 2,  "span": 2, "row": 1, "status": "planned", "type": "polish", "due": "", "complete": 0 },
-        { "id": "fe3", "laneId": "frontend", "title": "Server components",       "start": 7,  "span": 5, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
-        { "id": "be1", "laneId": "backend",  "title": "GraphQL gateway",         "start": 1,  "span": 4, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
-        { "id": "be2", "laneId": "backend",  "title": "Auth refactor",           "start": 5,  "span": 2, "row": 1, "status": "planned", "type": "build", "due": "", "complete": 0 },
-        { "id": "be3", "laneId": "backend",  "title": "Event bus (Kafka)",       "start": 7,  "span": 4, "row": 0, "status": "pending", "type": "data",  "due": "", "complete": 0 },
-        { "id": "in1", "laneId": "infra",    "title": "K8s cluster upgrade",     "start": 1,  "span": 2, "row": 0, "status": "funded",  "type": "build", "due": "", "complete": 50 },
-        { "id": "in2", "laneId": "infra",    "title": "Trace sampling tuning",   "start": 4,  "span": 2, "row": 0, "status": "planned", "type": "data",  "due": "", "complete": 0 },
-        { "id": "in3", "laneId": "infra",    "title": "Cost rightsizing",        "start": 5,  "span": 4, "row": 1, "status": "planned", "type": "polish","due": "", "complete": 0 },
-        { "id": "in4", "laneId": "infra",    "title": "DR runbook",              "start": 11, "span": 2, "row": 0, "status": "conditional", "type": "polish", "due": "", "complete": 0 }
+        { "id": "fe1", "laneId": "frontend", "title": "Design system v2",      "startDate": "2026-01-05", "endDate": "2026-04-24", "row": 0, "status": "funded",      "type": "polish", "complete": 30 },
+        { "id": "fe2", "laneId": "frontend", "title": "Bundle size budget",    "startDate": "2026-02-09", "endDate": "2026-03-13", "row": 1, "status": "planned",     "type": "polish", "complete": 0  },
+        { "id": "fe3", "laneId": "frontend", "title": "Server components",     "startDate": "2026-07-06", "endDate": "2026-11-13", "row": 0, "status": "planned",     "type": "build",  "complete": 0  },
+        { "id": "be1", "laneId": "backend",  "title": "GraphQL gateway",       "startDate": "2026-01-12", "endDate": "2026-04-17", "row": 0, "status": "planned",     "type": "build",  "complete": 0  },
+        { "id": "be2", "laneId": "backend",  "title": "Auth refactor",         "startDate": "2026-05-04", "endDate": "2026-06-12", "row": 1, "status": "planned",     "type": "build",  "complete": 0  },
+        { "id": "be3", "laneId": "backend",  "title": "Event bus (Kafka)",     "startDate": "2026-07-06", "endDate": "2026-10-09", "row": 0, "status": "pending",     "type": "data",   "complete": 0  },
+        { "id": "in1", "laneId": "infra",    "title": "K8s cluster upgrade",   "startDate": "2026-01-05", "endDate": "2026-02-06", "row": 0, "status": "funded",      "type": "build",  "complete": 50 },
+        { "id": "in2", "laneId": "infra",    "title": "Trace sampling tuning", "startDate": "2026-04-06", "endDate": "2026-05-08", "row": 0, "status": "planned",     "type": "data",   "complete": 0  },
+        { "id": "in3", "laneId": "infra",    "title": "Cost rightsizing",      "startDate": "2026-05-04", "endDate": "2026-08-14", "row": 1, "status": "planned",     "type": "polish", "complete": 0  },
+        { "id": "in4", "laneId": "infra",    "title": "DR runbook",            "startDate": "2026-11-09", "endDate": "2026-12-11", "row": 0, "status": "conditional", "type": "polish", "complete": 0  }
       ]
     },
-    "2027": { "granularity": "month", "lanes": [], "items": [] }
+    "2027": { "granularity": "day", "lanes": [], "items": [] }
   }
 }

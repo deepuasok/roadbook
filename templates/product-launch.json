@@ -1,11 +1,11 @@
 {
-  "roadbookVersion": 2,
+  "roadbookVersion": 3,
   "title": "Product Launch 2026",
   "eyebrow": "Launch plan",
   "activeYear": "2026",
   "data": {
     "2026": {
-      "granularity": "month",
+      "granularity": "day",
       "lanes": [
         { "id": "discovery", "name": "Discovery", "description": "Research and validation before build.", "color": "sky" },
         { "id": "build",     "name": "Build",     "description": "Engineering and core feature work.",   "color": "sage" },
@@ -13,16 +13,16 @@
         { "id": "launch",    "name": "Launch",    "description": "GA, marketing, scale.",                "color": "coral" }
       ],
       "items": [
-        { "id": "d1", "laneId": "discovery", "title": "Customer interviews",   "start": 1,  "span": 2, "row": 0, "status": "funded",  "type": "data",   "due": "", "complete": 40 },
-        { "id": "d2", "laneId": "discovery", "title": "Pricing research",      "start": 2,  "span": 3, "row": 1, "status": "planned", "type": "data",   "due": "", "complete": 0 },
-        { "id": "b1", "laneId": "build",     "title": "Core MVP",              "start": 4,  "span": 4, "row": 0, "status": "planned", "type": "build",  "due": "", "complete": 0 },
-        { "id": "b2", "laneId": "build",     "title": "Onboarding flow",       "start": 7,  "span": 2, "row": 0, "status": "planned", "type": "build",  "due": "", "complete": 0 },
-        { "id": "b3", "laneId": "build",     "title": "Payments integration",  "start": 8,  "span": 2, "row": 1, "status": "pending", "type": "build",  "due": "", "complete": 0 },
-        { "id": "be1","laneId": "beta",      "title": "Closed beta (10 users)","start": 8,  "span": 2, "row": 0, "status": "soon",    "type": "polish", "due": "", "complete": 0 },
-        { "id": "be2","laneId": "beta",      "title": "Open beta",             "start": 10, "span": 2, "row": 0, "status": "planned", "type": "polish", "due": "", "complete": 0 },
-        { "id": "l1", "laneId": "launch",    "title": "GA release",            "start": 11, "span": 2, "row": 0, "status": "conditional", "type": "build", "due": "", "complete": 0 }
+        { "id": "d1", "laneId": "discovery", "title": "Customer interviews",   "startDate": "2026-01-05", "endDate": "2026-02-13", "row": 0, "status": "funded",      "type": "data",   "complete": 40 },
+        { "id": "d2", "laneId": "discovery", "title": "Pricing research",      "startDate": "2026-02-09", "endDate": "2026-04-17", "row": 1, "status": "planned",     "type": "data",   "complete": 0  },
+        { "id": "b1", "laneId": "build",     "title": "Core MVP",              "startDate": "2026-03-30", "endDate": "2026-07-24", "row": 0, "status": "planned",     "type": "build",  "complete": 0  },
+        { "id": "b2", "laneId": "build",     "title": "Onboarding flow",       "startDate": "2026-07-27", "endDate": "2026-09-04", "row": 0, "status": "planned",     "type": "build",  "complete": 0  },
+        { "id": "b3", "laneId": "build",     "title": "Payments integration",  "startDate": "2026-08-03", "endDate": "2026-09-25", "row": 1, "status": "pending",     "type": "build",  "complete": 0  },
+        { "id": "be1","laneId": "beta",      "title": "Closed beta (10 users)","startDate": "2026-08-17", "endDate": "2026-09-25", "row": 0, "status": "soon",        "type": "polish", "complete": 0  },
+        { "id": "be2","laneId": "beta",      "title": "Open beta",             "startDate": "2026-09-28", "endDate": "2026-11-06", "row": 0, "status": "planned",     "type": "polish", "complete": 0  },
+        { "id": "l1", "laneId": "launch",    "title": "GA release",            "startDate": "2026-11-09", "endDate": "2026-12-04", "row": 0, "status": "conditional", "type": "build",  "complete": 0  }
       ]
     },
-    "2027": { "granularity": "month", "lanes": [], "items": [] }
+    "2027": { "granularity": "day", "lanes": [], "items": [] }
   }
 }
