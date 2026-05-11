@@ -474,9 +474,12 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
   user-select: none;
   z-index: 2;
-  overflow: hidden;
   touch-action: none;
 }
+/* Round the fill on the left so it follows the card's left corners cleanly
+   when the card no longer has overflow:hidden (needed so the done-badge can
+   sit outside the chip on the top-right). */
+.card .fill { border-radius: 6px 0 0 6px; }
 .card:hover { background-color: var(--pill-bg-hover); border-color: var(--border-strong); }
 .card.dragging {
   cursor: grabbing;
@@ -567,20 +570,48 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .card[data-narrow="true"] .meta { display: none; }
 .card[data-narrow="true"] .title { font-size: 11px; }
 
-.resize {
-  position: absolute; right: -4px; top: 0; bottom: 0;
+/* Completed badge — solid green circle with a white check, centered on the
+   top-right vertex of the chip (slightly outside). */
+.done-badge {
+  position: absolute;
+  top: 0; right: 0;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background-color: var(--status-funded);
+  display: flex; align-items: center; justify-content: center;
+  transform: translate(50%, -50%);
+  z-index: 6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+[data-theme="dark"] .done-badge {
+  background-color: #10B981;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 1.5px var(--bg);
+}
+.done-badge svg { width: 12px; height: 12px; }
+.done-badge[hidden] { display: none; }
+
+.resize, .resize-start {
+  position: absolute; top: 0; bottom: 0;
   width: 10px; cursor: ew-resize; z-index: 5;
   display: flex; align-items: center; justify-content: center;
   touch-action: none;
 }
-.resize::after {
+.resize { right: -4px; }
+.resize-start { left: -4px; }
+.resize::after, .resize-start::after {
   content: ""; width: 2px; height: 14px;
-  background: transparent; border-radius: 2px;
-  transition: background 120ms ease;
+  background-color: transparent; border-radius: 2px;
+  transition: background-color 120ms ease;
 }
-.card:hover .resize::after { background-color: var(--text-muted); }
+.card:hover .resize::after,
+.card:hover .resize-start::after { background-color: var(--text-muted); }
 .card.selected .resize::after,
-.card:focus-visible .resize::after { background-color: var(--accent); }
+.card.selected .resize-start::after,
+.card:focus-visible .resize::after,
+.card:focus-visible .resize-start::after,
+.card.resizing .resize::after,
+.card.resizing .resize-start::after { background-color: var(--accent); }
 
 /* ---------- 8. Color picker popup ---------- */
 .color-popup {

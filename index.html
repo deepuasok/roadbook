@@ -484,9 +484,12 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
   user-select: none;
   z-index: 2;
-  overflow: hidden;
   touch-action: none;
 }
+/* Round the fill on the left so it follows the card's left corners cleanly
+   when the card no longer has overflow:hidden (needed so the done-badge can
+   sit outside the chip on the top-right). */
+.card .fill { border-radius: 6px 0 0 6px; }
 .card:hover { background-color: var(--pill-bg-hover); border-color: var(--border-strong); }
 .card.dragging {
   cursor: grabbing;
@@ -577,20 +580,48 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .card[data-narrow="true"] .meta { display: none; }
 .card[data-narrow="true"] .title { font-size: 11px; }
 
-.resize {
-  position: absolute; right: -4px; top: 0; bottom: 0;
+/* Completed badge — solid green circle with a white check, centered on the
+   top-right vertex of the chip (slightly outside). */
+.done-badge {
+  position: absolute;
+  top: 0; right: 0;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background-color: var(--status-funded);
+  display: flex; align-items: center; justify-content: center;
+  transform: translate(50%, -50%);
+  z-index: 6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+[data-theme="dark"] .done-badge {
+  background-color: #10B981;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 1.5px var(--bg);
+}
+.done-badge svg { width: 12px; height: 12px; }
+.done-badge[hidden] { display: none; }
+
+.resize, .resize-start {
+  position: absolute; top: 0; bottom: 0;
   width: 10px; cursor: ew-resize; z-index: 5;
   display: flex; align-items: center; justify-content: center;
   touch-action: none;
 }
-.resize::after {
+.resize { right: -4px; }
+.resize-start { left: -4px; }
+.resize::after, .resize-start::after {
   content: ""; width: 2px; height: 14px;
-  background: transparent; border-radius: 2px;
-  transition: background 120ms ease;
+  background-color: transparent; border-radius: 2px;
+  transition: background-color 120ms ease;
 }
-.card:hover .resize::after { background-color: var(--text-muted); }
+.card:hover .resize::after,
+.card:hover .resize-start::after { background-color: var(--text-muted); }
 .card.selected .resize::after,
-.card:focus-visible .resize::after { background-color: var(--accent); }
+.card.selected .resize-start::after,
+.card:focus-visible .resize::after,
+.card:focus-visible .resize-start::after,
+.card.resizing .resize::after,
+.card.resizing .resize-start::after { background-color: var(--accent); }
 
 /* ---------- 8. Color picker popup ---------- */
 .color-popup {
@@ -1613,8 +1644,10 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
   function attachCard(card) {
     card.addEventListener("pointerdown", onPointerDown);
-    const handle = card.querySelector(".resize");
-    if (handle) handle.addEventListener("pointerdown", onResizeStart);
+    const handleEnd = card.querySelector(".resize");
+    const handleStart = card.querySelector(".resize-start");
+    if (handleEnd) handleEnd.addEventListener("pointerdown", (e) => onResizeStart(e, "end"));
+    if (handleStart) handleStart.addEventListener("pointerdown", (e) => onResizeStart(e, "start"));
   }
 
   function activeYearInt() {
@@ -1629,7 +1662,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   }
 
   // ----------------------------- RESIZE -----------------------------
-  function onResizeStart(e) {
+  // `side` is "end" (right handle, changes endDate) or "start" (left handle,
+  // changes startDate). Same handler family for both; the math swaps based on side.
+  function onResizeStart(e, side) {
     e.preventDefault();
     e.stopPropagation();
     const card = e.currentTarget.closest(".card");
@@ -1648,6 +1683,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
     dragState = {
       mode: "resize",
+      side, // "start" or "end"
       id: card.dataset.id,
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -1655,6 +1691,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       body,
       initialStartDay: startDay,
       initialEndDay: endDay,
+      currentStartDay: startDay,
       currentEndDay: endDay,
       card
     };
@@ -1673,21 +1710,34 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     const SNAP = dates.SNAP_DAYS;
     const dx = e.clientX - dragState.startX;
     const daysDelta = dayDistanceFromPixels(dx, dragState.bodyRect.width);
+    const row = parseInt(dragState.card.style.getPropertyValue("--row"), 10) || 0;
 
-    // Don't let preview shrink below the snap minimum (14 days) — the card
-    // would otherwise collapse to 0px width when the cursor passes the start.
-    const minEnd = dragState.initialStartDay + SNAP - 1;
-    const targetEnd = Math.max(minEnd, Math.min(totalDays, dragState.initialEndDay + daysDelta));
-    const newSpan = targetEnd - dragState.initialStartDay + 1;
-
-    // Live, unsnapped width — card follows cursor smoothly
-    dragState.card.style.setProperty("--span-days", newSpan);
-    dragState.currentEndDay = targetEnd;
-
-    // Ghost previews the snapped 14-day end
-    const snappedSpan = Math.max(SNAP, Math.round(newSpan / SNAP) * SNAP);
-    const snappedEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
-    showGhostByDays(dragState.body, dragState.initialStartDay, snappedEnd, parseInt(dragState.card.style.getPropertyValue("--row"), 10) || 0);
+    if (dragState.side === "end") {
+      // Right edge — change endDay; keep startDay fixed. Min span 14 days.
+      const minEnd = dragState.initialStartDay + SNAP - 1;
+      const targetEnd = Math.max(minEnd, Math.min(totalDays, dragState.initialEndDay + daysDelta));
+      const newSpan = targetEnd - dragState.initialStartDay + 1;
+      dragState.card.style.setProperty("--span-days", newSpan);
+      dragState.currentEndDay = targetEnd;
+      const snappedSpan = Math.max(SNAP, Math.round(newSpan / SNAP) * SNAP);
+      const snappedEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
+      showGhostByDays(dragState.body, dragState.initialStartDay, snappedEnd, row);
+    } else {
+      // Left edge — change startDay; keep endDay fixed. Min span 14 days.
+      const maxStart = dragState.initialEndDay - SNAP + 1;
+      const targetStart = Math.max(1, Math.min(maxStart, dragState.initialStartDay + daysDelta));
+      const newSpan = dragState.initialEndDay - targetStart + 1;
+      dragState.card.style.setProperty("--start-day", targetStart);
+      dragState.card.style.setProperty("--span-days", newSpan);
+      dragState.currentStartDay = targetStart;
+      // Snap preview: round the start to nearest SNAP, then ghost shows the snapped position.
+      const dayIndex = targetStart - 1; // 0-based for snap math
+      const snappedStartDay = Math.max(0, Math.min(
+        dragState.initialEndDay - SNAP,
+        Math.round(dayIndex / SNAP) * SNAP
+      )) + 1; // back to 1-based
+      showGhostByDays(dragState.body, snappedStartDay, dragState.initialEndDay, row);
+    }
   }
 
   function onResizeEnd(e) {
@@ -1706,12 +1756,27 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       const totalDays = yearDays();
       const SNAP = dates.SNAP_DAYS;
       const year = activeYearInt();
-      const currentSpan = dragState.currentEndDay - dragState.initialStartDay + 1;
-      const snappedSpan = Math.max(SNAP, Math.round(currentSpan / SNAP) * SNAP);
-      const finalEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
-      const newEndDate = dates.addDaysIso(dates.isoFromYMD(year, 1, 1), finalEnd - 1);
-      if (newEndDate !== item.endDate) {
-        window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+      const yearStart = dates.isoFromYMD(year, 1, 1);
+
+      if (dragState.side === "end") {
+        const currentSpan = dragState.currentEndDay - dragState.initialStartDay + 1;
+        const snappedSpan = Math.max(SNAP, Math.round(currentSpan / SNAP) * SNAP);
+        const finalEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
+        const newEndDate = dates.addDaysIso(yearStart, finalEnd - 1);
+        if (newEndDate !== item.endDate) {
+          window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+        }
+      } else {
+        // Snap startDay to nearest 14-day boundary; preserve endDate
+        const dayIndex = dragState.currentStartDay - 1;
+        const snappedStartDay = Math.max(0, Math.min(
+          dragState.initialEndDay - SNAP,
+          Math.round(dayIndex / SNAP) * SNAP
+        )) + 1;
+        const newStartDate = dates.addDaysIso(yearStart, snappedStartDay - 1);
+        if (newStartDate !== item.startDate) {
+          window.Roadbook.state.commit(() => { item.startDate = newStartDate; });
+        }
       }
       window.Roadbook.app.updateCardDom(item);
     }
@@ -1720,7 +1785,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
   // ----------------------------- MOVE -----------------------------
   function onPointerDown(e) {
-    if (e.target.classList && e.target.classList.contains("resize")) return;
+    if (e.target.classList && (e.target.classList.contains("resize") || e.target.classList.contains("resize-start"))) return;
     if (e.button !== 0 && e.button !== undefined && e.pointerType === "mouse") return;
     const card = e.currentTarget;
     const item = window.Roadbook.state.findItem(card.dataset.id);
@@ -2603,13 +2668,19 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.innerHTML = `
       <div class="fill"></div>
+      <div class="resize-start" aria-hidden="true"></div>
       <span class="dot" aria-hidden="true"></span>
       <span class="title"></span>
       <span class="meta"></span>
       <div class="resize" aria-hidden="true"></div>
+      <div class="done-badge" aria-hidden="true" hidden>
+        <svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2L5 8.4l4-4.6"/></svg>
+      </div>
     `;
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
+    const badge = card.querySelector(".done-badge");
+    if (badge) badge.hidden = (item.complete || 0) < 100;
     window.Roadbook.drag.attachCard(card);
     body.appendChild(card);
     return card;
@@ -2646,6 +2717,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
+    const badge = card.querySelector(".done-badge");
+    if (badge) badge.hidden = (item.complete || 0) < 100;
   }
 
   function replaceCard(item, oldLaneId) {

@@ -133,13 +133,19 @@
       `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.innerHTML = `
       <div class="fill"></div>
+      <div class="resize-start" aria-hidden="true"></div>
       <span class="dot" aria-hidden="true"></span>
       <span class="title"></span>
       <span class="meta"></span>
       <div class="resize" aria-hidden="true"></div>
+      <div class="done-badge" aria-hidden="true" hidden>
+        <svg viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.2L5 8.4l4-4.6"/></svg>
+      </div>
     `;
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
+    const badge = card.querySelector(".done-badge");
+    if (badge) badge.hidden = (item.complete || 0) < 100;
     window.Roadbook.drag.attachCard(card);
     body.appendChild(card);
     return card;
@@ -176,6 +182,8 @@
       `${item.title}, ${item.status}, ${item.startDate} to ${item.endDate}, ${spanDays} days`);
     card.querySelector(".title").textContent = item.title;
     card.querySelector(".meta").innerHTML = renderMeta(item);
+    const badge = card.querySelector(".done-badge");
+    if (badge) badge.hidden = (item.complete || 0) < 100;
   }
 
   function replaceCard(item, oldLaneId) {

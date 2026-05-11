@@ -13,8 +13,10 @@
 
   function attachCard(card) {
     card.addEventListener("pointerdown", onPointerDown);
-    const handle = card.querySelector(".resize");
-    if (handle) handle.addEventListener("pointerdown", onResizeStart);
+    const handleEnd = card.querySelector(".resize");
+    const handleStart = card.querySelector(".resize-start");
+    if (handleEnd) handleEnd.addEventListener("pointerdown", (e) => onResizeStart(e, "end"));
+    if (handleStart) handleStart.addEventListener("pointerdown", (e) => onResizeStart(e, "start"));
   }
 
   function activeYearInt() {
@@ -29,7 +31,9 @@
   }
 
   // ----------------------------- RESIZE -----------------------------
-  function onResizeStart(e) {
+  // `side` is "end" (right handle, changes endDate) or "start" (left handle,
+  // changes startDate). Same handler family for both; the math swaps based on side.
+  function onResizeStart(e, side) {
     e.preventDefault();
     e.stopPropagation();
     const card = e.currentTarget.closest(".card");
@@ -48,6 +52,7 @@
 
     dragState = {
       mode: "resize",
+      side, // "start" or "end"
       id: card.dataset.id,
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -55,6 +60,7 @@
       body,
       initialStartDay: startDay,
       initialEndDay: endDay,
+      currentStartDay: startDay,
       currentEndDay: endDay,
       card
     };
@@ -73,21 +79,34 @@
     const SNAP = dates.SNAP_DAYS;
     const dx = e.clientX - dragState.startX;
     const daysDelta = dayDistanceFromPixels(dx, dragState.bodyRect.width);
+    const row = parseInt(dragState.card.style.getPropertyValue("--row"), 10) || 0;
 
-    // Don't let preview shrink below the snap minimum (14 days) — the card
-    // would otherwise collapse to 0px width when the cursor passes the start.
-    const minEnd = dragState.initialStartDay + SNAP - 1;
-    const targetEnd = Math.max(minEnd, Math.min(totalDays, dragState.initialEndDay + daysDelta));
-    const newSpan = targetEnd - dragState.initialStartDay + 1;
-
-    // Live, unsnapped width — card follows cursor smoothly
-    dragState.card.style.setProperty("--span-days", newSpan);
-    dragState.currentEndDay = targetEnd;
-
-    // Ghost previews the snapped 14-day end
-    const snappedSpan = Math.max(SNAP, Math.round(newSpan / SNAP) * SNAP);
-    const snappedEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
-    showGhostByDays(dragState.body, dragState.initialStartDay, snappedEnd, parseInt(dragState.card.style.getPropertyValue("--row"), 10) || 0);
+    if (dragState.side === "end") {
+      // Right edge — change endDay; keep startDay fixed. Min span 14 days.
+      const minEnd = dragState.initialStartDay + SNAP - 1;
+      const targetEnd = Math.max(minEnd, Math.min(totalDays, dragState.initialEndDay + daysDelta));
+      const newSpan = targetEnd - dragState.initialStartDay + 1;
+      dragState.card.style.setProperty("--span-days", newSpan);
+      dragState.currentEndDay = targetEnd;
+      const snappedSpan = Math.max(SNAP, Math.round(newSpan / SNAP) * SNAP);
+      const snappedEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
+      showGhostByDays(dragState.body, dragState.initialStartDay, snappedEnd, row);
+    } else {
+      // Left edge — change startDay; keep endDay fixed. Min span 14 days.
+      const maxStart = dragState.initialEndDay - SNAP + 1;
+      const targetStart = Math.max(1, Math.min(maxStart, dragState.initialStartDay + daysDelta));
+      const newSpan = dragState.initialEndDay - targetStart + 1;
+      dragState.card.style.setProperty("--start-day", targetStart);
+      dragState.card.style.setProperty("--span-days", newSpan);
+      dragState.currentStartDay = targetStart;
+      // Snap preview: round the start to nearest SNAP, then ghost shows the snapped position.
+      const dayIndex = targetStart - 1; // 0-based for snap math
+      const snappedStartDay = Math.max(0, Math.min(
+        dragState.initialEndDay - SNAP,
+        Math.round(dayIndex / SNAP) * SNAP
+      )) + 1; // back to 1-based
+      showGhostByDays(dragState.body, snappedStartDay, dragState.initialEndDay, row);
+    }
   }
 
   function onResizeEnd(e) {
@@ -106,12 +125,27 @@
       const totalDays = yearDays();
       const SNAP = dates.SNAP_DAYS;
       const year = activeYearInt();
-      const currentSpan = dragState.currentEndDay - dragState.initialStartDay + 1;
-      const snappedSpan = Math.max(SNAP, Math.round(currentSpan / SNAP) * SNAP);
-      const finalEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
-      const newEndDate = dates.addDaysIso(dates.isoFromYMD(year, 1, 1), finalEnd - 1);
-      if (newEndDate !== item.endDate) {
-        window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+      const yearStart = dates.isoFromYMD(year, 1, 1);
+
+      if (dragState.side === "end") {
+        const currentSpan = dragState.currentEndDay - dragState.initialStartDay + 1;
+        const snappedSpan = Math.max(SNAP, Math.round(currentSpan / SNAP) * SNAP);
+        const finalEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
+        const newEndDate = dates.addDaysIso(yearStart, finalEnd - 1);
+        if (newEndDate !== item.endDate) {
+          window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+        }
+      } else {
+        // Snap startDay to nearest 14-day boundary; preserve endDate
+        const dayIndex = dragState.currentStartDay - 1;
+        const snappedStartDay = Math.max(0, Math.min(
+          dragState.initialEndDay - SNAP,
+          Math.round(dayIndex / SNAP) * SNAP
+        )) + 1;
+        const newStartDate = dates.addDaysIso(yearStart, snappedStartDay - 1);
+        if (newStartDate !== item.startDate) {
+          window.Roadbook.state.commit(() => { item.startDate = newStartDate; });
+        }
       }
       window.Roadbook.app.updateCardDom(item);
     }
@@ -120,7 +154,7 @@
 
   // ----------------------------- MOVE -----------------------------
   function onPointerDown(e) {
-    if (e.target.classList && e.target.classList.contains("resize")) return;
+    if (e.target.classList && (e.target.classList.contains("resize") || e.target.classList.contains("resize-start"))) return;
     if (e.button !== 0 && e.button !== undefined && e.pointerType === "mouse") return;
     const card = e.currentTarget;
     const item = window.Roadbook.state.findItem(card.dataset.id);
