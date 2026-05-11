@@ -1,0 +1,27 @@
+{
+  "roadbookVersion": 1,
+  "title": "Product Launch 2026",
+  "eyebrow": "Launch plan",
+  "activeYear": "2026",
+  "data": {
+    "2026": {
+      "lanes": [
+        { "id": "discovery", "name": "Discovery", "description": "Research and validation before build.", "color": "sky" },
+        { "id": "build",     "name": "Build",     "description": "Engineering and core feature work.",   "color": "sage" },
+        { "id": "beta",      "name": "Beta",      "description": "Early customers, feedback loops.",     "color": "lemon" },
+        { "id": "launch",    "name": "Launch",    "description": "GA, marketing, scale.",                "color": "coral" }
+      ],
+      "items": [
+        { "id": "d1", "laneId": "discovery", "title": "Customer interviews",   "start": 1, "span": 1, "row": 0, "status": "funded",  "type": "data",   "due": "", "complete": 40 },
+        { "id": "d2", "laneId": "discovery", "title": "Pricing research",      "start": 1, "span": 2, "row": 1, "status": "planned", "type": "data",   "due": "", "complete": 0 },
+        { "id": "b1", "laneId": "build",     "title": "Core MVP",              "start": 2, "span": 2, "row": 0, "status": "planned", "type": "build",  "due": "", "complete": 0 },
+        { "id": "b2", "laneId": "build",     "title": "Onboarding flow",       "start": 3, "span": 1, "row": 0, "status": "planned", "type": "build",  "due": "", "complete": 0 },
+        { "id": "b3", "laneId": "build",     "title": "Payments integration",  "start": 3, "span": 1, "row": 1, "status": "pending", "type": "build",  "due": "", "complete": 0 },
+        { "id": "be1","laneId": "beta",      "title": "Closed beta (10 users)","start": 3, "span": 1, "row": 0, "status": "soon",    "type": "polish", "due": "", "complete": 0 },
+        { "id": "be2","laneId": "beta",      "title": "Open beta",             "start": 4, "span": 1, "row": 0, "status": "planned", "type": "polish", "due": "", "complete": 0 },
+        { "id": "l1", "laneId": "launch",    "title": "GA release",            "start": 4, "span": 1, "row": 0, "status": "conditional", "type": "build", "due": "", "complete": 0 }
+      ]
+    },
+    "2027": { "lanes": [], "items": [] }
+  }
+}

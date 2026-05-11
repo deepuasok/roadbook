@@ -1,0 +1,2308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0F19" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Roadbook — a fork-friendly, offline-first roadmap builder for product managers. Drag chips, share PNG/SVG/link, version in git.">
+<title>Roadbook</title>
+<style>
+/* ============================================================
+   Roadbook · styles
+   ----
+   Sections:
+     1. Theme tokens (light + dark)
+     2. Base + layout
+     3. Header (title, eyebrow, year pills, head tools)
+     4. Toolbar + legend + share actions
+     5. Axis (year + quarters)
+     6. Lanes (container, head, body, ghost)
+     7. Cards (chips, fill, resize, focus)
+     8. Color picker popup
+     9. Modal (edit + template)
+    10. Buttons + footer + toast
+    11. Mobile + print + reduced motion
+   ============================================================ */
+
+/* ---------- 1. Theme tokens ---------- */
+:root,
+[data-theme="light"] {
+  --bg: #FFFFFF;
+  --bg-soft: #F9FAFB;
+  --bg-grid: #F3F4F6;
+  --border: #E5E7EB;
+  --border-strong: #D1D5DB;
+  --text: #0A0A0A;
+  --text-dim: #6B7280;
+  --text-muted: #9CA3AF;
+  --pill-bg: #FFFFFF;
+  --pill-bg-hover: #F9FAFB;
+  --modal-bg: #FFFFFF;
+  --modal-overlay: rgba(17, 24, 39, 0.35);
+  --toast-bg: #111827;
+  --toast-fg: #FFFFFF;
+
+  --accent: #6366F1;
+  --accent-soft: rgba(99, 102, 241, 0.12);
+  --accent-soft-bg: #EEF2FF;
+
+  --type-build: #3B82F6;
+  --type-data: #8B5CF6;
+  --type-polish: #14B8A6;
+
+  --status-planned: #111827;
+  --status-funded: #10B981;
+  --status-soon: #F59E0B;
+  --status-pending: #DC2626;
+  --status-conditional: #D1D5DB;
+  --status-conditional-stroke: #9CA3AF;
+
+  --fill-pct: rgba(16, 185, 129, 0.14);
+  --fill-pct-text: #047857;
+
+  --row-h: 34px;
+  --row-gap: 6px;
+  --pill-h: 30px;
+
+  --lane-container-border: #EADFC3;
+  --lane-container-shadow: 0 1px 2px rgba(139, 108, 54, 0.05);
+  --lane-divider: rgba(234, 223, 195, 0.55);
+
+  --lane-cream: #FEFBEF;
+  --lane-sage: #F7FAF1;
+  --lane-blush: #FDF5EC;
+  --lane-mint: #F0F8F5;
+  --lane-peach: #FEF6EB;
+  --lane-rose: #FAF1F3;
+  --lane-sky: #EEF6FC;
+  --lane-lavender: #F5F0FB;
+  --lane-lemon: #FEFCE8;
+  --lane-coral: #FEF2ED;
+  --lane-stone: #F5F5F4;
+  --lane-periwinkle: #EEF1FA;
+}
+
+[data-theme="dark"] {
+  --bg: #0B0F19;
+  --bg-soft: #111726;
+  --bg-grid: #1A2030;
+  --border: #1F2937;
+  --border-strong: #2A3344;
+  --text: #F3F4F6;
+  --text-dim: #9CA3AF;
+  --text-muted: #6B7280;
+  --pill-bg: #131A28;
+  --pill-bg-hover: #1A2233;
+  --modal-bg: #131A28;
+  --modal-overlay: rgba(0, 0, 0, 0.55);
+  --toast-bg: #E5E7EB;
+  --toast-fg: #111827;
+
+  --accent-soft: rgba(99, 102, 241, 0.22);
+  --accent-soft-bg: #1B1F3A;
+
+  --status-planned: #E5E7EB;
+  --status-conditional: #374151;
+  --status-conditional-stroke: #4B5563;
+
+  --fill-pct: rgba(16, 185, 129, 0.22);
+  --fill-pct-text: #6EE7B7;
+
+  --lane-container-border: #2A3344;
+  --lane-container-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lane-divider: rgba(42, 51, 68, 0.7);
+
+  --lane-cream: #221E13;
+  --lane-sage: #182018;
+  --lane-blush: #211913;
+  --lane-mint: #122019;
+  --lane-peach: #221A11;
+  --lane-rose: #1F1517;
+  --lane-sky: #112030;
+  --lane-lavender: #1A1729;
+  --lane-lemon: #1F1E10;
+  --lane-coral: #221612;
+  --lane-stone: #1A1A18;
+  --lane-periwinkle: #14182A;
+}
+
+/* ---------- 2. Base + layout ---------- */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background-color: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Inter", system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  font-size: 14px;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.page { max-width: 1200px; margin: 0 auto; padding: 24px 32px 32px; }
+
+/* ---------- 3. Header ---------- */
+.head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 16px; }
+.head-left { min-width: 0; }
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.8px;
+  color: var(--text-muted); text-transform: uppercase;
+  outline: none;
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+}
+.eyebrow:hover, .eyebrow:focus-visible { background-color: var(--bg-grid); }
+.eyebrow:empty::before, h1:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+h1 {
+  font-size: 26px; font-weight: 700; letter-spacing: -0.02em;
+  margin: 4px 0 0;
+  outline: none;
+  border-radius: 6px;
+  padding: 2px 4px;
+  margin-left: -4px; margin-right: -4px;
+}
+h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
+
+.head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+
+.year-pills { display: inline-flex; background-color: var(--bg-grid); border-radius: 999px; padding: 3px; gap: 2px; }
+.year-pill {
+  appearance: none;
+  border: none; background: transparent;
+  font-family: inherit;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-dim);
+  padding: 5px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  letter-spacing: 0.2px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.year-pill.active { background-color: var(--text); color: var(--bg); }
+.year-pill:not(.active):hover { color: var(--text); }
+
+.head-tools { display: inline-flex; gap: 6px; }
+.head-tools .icon-btn { padding: 5px 7px; }
+.head-tools .icon-btn svg { width: 14px; height: 14px; }
+
+/* ---------- 4. Toolbar + legend + actions ---------- */
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  margin: 16px 0 12px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.legend { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--text-dim); }
+.legend-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.legend-row .label {
+  font-weight: 600; color: var(--text-muted);
+  letter-spacing: 0.3px; font-size: 10px;
+  text-transform: uppercase; min-width: 42px;
+}
+.legend .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.legend .stripe { display: inline-block; width: 4px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.dot-planned { background-color: var(--status-planned); }
+.dot-funded { background-color: var(--status-funded); }
+.dot-soon { background-color: var(--status-soon); }
+.dot-pending { background-color: var(--status-pending); }
+.dot-conditional { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.stripe-build { background-color: var(--type-build); }
+.stripe-data { background-color: var(--type-data); }
+.stripe-polish { background-color: var(--type-polish); }
+
+.toolbar-actions { display: flex; gap: 8px; align-items: center; }
+.toolbar-actions .divider {
+  width: 1px; height: 18px; background-color: var(--border); margin: 0 4px;
+}
+.icon-btn {
+  appearance: none;
+  border: 1px solid var(--border); background-color: var(--bg);
+  padding: 4px 8px; border-radius: 6px;
+  font-size: 12px; cursor: pointer;
+  font-family: inherit;
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--text-dim);
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+.icon-btn:hover { border-color: var(--border-strong); background-color: var(--bg-soft); color: var(--text); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.icon-btn svg { width: 13px; height: 13px; }
+.icon-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* ---------- 5. Axis ---------- */
+.axis {
+  display: grid;
+  grid-template-columns: 140px repeat(4, 1fr);
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.axis .year { font-size: 12px; font-weight: 600; align-self: end; }
+.axis .q {
+  font-size: 10px; font-weight: 600; letter-spacing: 1px;
+  color: var(--text-muted); text-transform: uppercase;
+  align-self: end;
+}
+
+/* ---------- 6. Lanes ---------- */
+#lanes {
+  border: 1px solid var(--lane-container-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 16px 0 12px;
+  box-shadow: var(--lane-container-shadow);
+}
+
+.lane {
+  --lane-bg: var(--lane-cream);
+  position: relative;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(to right,
+    var(--lane-bg) 0,
+    var(--lane-bg) 156px,
+    var(--bg) 156px,
+    var(--bg) 100%);
+  border-bottom: 1px solid var(--lane-divider);
+}
+.lane:last-child { border-bottom: none; }
+
+.lane[data-color="cream"]      { --lane-bg: var(--lane-cream); }
+.lane[data-color="sage"]       { --lane-bg: var(--lane-sage); }
+.lane[data-color="blush"]      { --lane-bg: var(--lane-blush); }
+.lane[data-color="mint"]       { --lane-bg: var(--lane-mint); }
+.lane[data-color="peach"]      { --lane-bg: var(--lane-peach); }
+.lane[data-color="rose"]       { --lane-bg: var(--lane-rose); }
+.lane[data-color="sky"]        { --lane-bg: var(--lane-sky); }
+.lane[data-color="lavender"]   { --lane-bg: var(--lane-lavender); }
+.lane[data-color="lemon"]      { --lane-bg: var(--lane-lemon); }
+.lane[data-color="coral"]      { --lane-bg: var(--lane-coral); }
+.lane[data-color="stone"]      { --lane-bg: var(--lane-stone); }
+.lane[data-color="periwinkle"] { --lane-bg: var(--lane-periwinkle); }
+
+.lane-head { position: relative; }
+.lane-head h2 {
+  font-size: 14px; font-weight: 600; letter-spacing: -0.005em;
+  margin: 0 0 2px;
+  outline: none;
+  border-radius: 4px;
+  padding: 1px 3px;
+  margin-left: -3px;
+}
+.lane-head h2[contenteditable="true"]:hover,
+.lane-head h2[contenteditable="true"]:focus-visible { background: rgba(0,0,0,0.04); }
+[data-theme="dark"] .lane-head h2[contenteditable="true"]:hover,
+[data-theme="dark"] .lane-head h2[contenteditable="true"]:focus-visible { background: rgba(255,255,255,0.06); }
+.lane-head p {
+  font-size: 11px; color: var(--text-dim); line-height: 1.35;
+  margin: 0 0 6px; max-width: 130px;
+  outline: none;
+  border-radius: 4px;
+}
+.lane-head p[contenteditable="true"]:hover,
+.lane-head p[contenteditable="true"]:focus-visible { background: rgba(0,0,0,0.04); }
+[data-theme="dark"] .lane-head p[contenteditable="true"]:hover,
+[data-theme="dark"] .lane-head p[contenteditable="true"]:focus-visible { background: rgba(255,255,255,0.06); }
+
+.lane-head .lane-actions {
+  display: flex; gap: 4px; margin-top: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.lane:hover .lane-head .lane-actions,
+.lane:focus-within .lane-head .lane-actions { opacity: 1; }
+.lane-head .icon-action {
+  appearance: none; border: none; background: transparent;
+  color: var(--text-muted);
+  width: 22px; height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: color 120ms ease, background 120ms ease;
+}
+.lane-head .icon-action:hover { color: var(--text); background-color: var(--bg-grid); }
+.lane-head .icon-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lane-head .icon-action.danger:hover { color: #991B1B; background: #FEF2F2; }
+[data-theme="dark"] .lane-head .icon-action.danger:hover { color: #FCA5A5; background: rgba(239, 68, 68, 0.12); }
+.lane-head .icon-action svg { width: 13px; height: 13px; }
+
+.lane-body {
+  position: relative;
+  min-height: var(--row-h);
+  transition: min-height 150ms ease;
+}
+
+.lane-body::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, transparent 0, transparent calc(25% - 1px), var(--border) calc(25% - 1px), var(--border) 25%, transparent 25%),
+    linear-gradient(to right, transparent 0, transparent calc(50% - 1px), var(--border) calc(50% - 1px), var(--border) 50%, transparent 50%),
+    linear-gradient(to right, transparent 0, transparent calc(75% - 1px), var(--border) calc(75% - 1px), var(--border) 75%, transparent 75%);
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.ghost {
+  position: absolute;
+  height: var(--pill-h);
+  border: 1.5px dashed var(--accent);
+  background-color: var(--accent-soft-bg);
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 80ms ease;
+  z-index: 1;
+}
+.ghost.show { opacity: 1; }
+
+/* ---------- 7. Cards ---------- */
+.card {
+  position: absolute;
+  left: calc((var(--start, 1) - 1) * 25%);
+  width: calc(var(--span, 1) * 25% - var(--row-gap));
+  top: calc(var(--row, 0) * var(--row-h));
+  height: var(--pill-h);
+  background-color: var(--pill-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px 0 12px;
+  display: flex; align-items: center; gap: 7px;
+  cursor: grab;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  user-select: none;
+  z-index: 2;
+  overflow: hidden;
+  touch-action: none;
+}
+.card:hover { background-color: var(--pill-bg-hover); border-color: var(--border-strong); }
+.card.dragging { opacity: 0.35; cursor: grabbing; }
+.card.selected,
+.card:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: transparent;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+  pointer-events: none;
+  z-index: 1;
+}
+.card[data-type="build"]::before { background-color: var(--type-build); }
+.card[data-type="data"]::before { background-color: var(--type-data); }
+.card[data-type="polish"]::before { background-color: var(--type-polish); }
+.card[data-type="build"],
+.card[data-type="data"],
+.card[data-type="polish"] { padding-left: 14px; }
+
+.card .fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: calc(var(--complete, 0) * 1%);
+  background-color: var(--fill-pct);
+  pointer-events: none;
+  z-index: 0;
+  transition: width 120ms ease;
+}
+
+.card > * { position: relative; z-index: 1; }
+
+.card .dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background-color: var(--status-planned); }
+.card[data-status="funded"] .dot { background-color: var(--status-funded); }
+.card[data-status="soon"] .dot { background-color: var(--status-soon); }
+.card[data-status="pending"] .dot { background-color: var(--status-pending); }
+.card[data-status="conditional"] .dot { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+
+.card .title {
+  font-size: 12px; font-weight: 500; line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1 1 auto; min-width: 0;
+  color: var(--text);
+}
+.card .meta {
+  flex: 0 0 auto;
+  font-size: 10px; font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
+  display: inline-flex; gap: 6px;
+}
+.card .meta .pct { color: var(--fill-pct-text); font-weight: 600; }
+
+.resize {
+  position: absolute; right: -4px; top: 0; bottom: 0;
+  width: 10px; cursor: ew-resize; z-index: 5;
+  display: flex; align-items: center; justify-content: center;
+  touch-action: none;
+}
+.resize::after {
+  content: ""; width: 2px; height: 14px;
+  background: transparent; border-radius: 2px;
+  transition: background 120ms ease;
+}
+.card:hover .resize::after { background-color: var(--text-muted); }
+.card.selected .resize::after,
+.card:focus-visible .resize::after { background-color: var(--accent); }
+
+/* ---------- 8. Color picker popup ---------- */
+.color-popup {
+  position: absolute;
+  z-index: 80;
+  background-color: var(--modal-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(6, 26px);
+  gap: 7px;
+}
+.color-swatch {
+  appearance: none;
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 0;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+[data-theme="dark"] .color-swatch { border-color: rgba(255,255,255,0.12); }
+.color-swatch:hover { transform: scale(1.1); }
+.color-swatch.active { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+.color-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 9. Modal ---------- */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background-color: var(--modal-overlay);
+  display: none; align-items: center; justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background-color: var(--modal-bg);
+  color: var(--text);
+  border-radius: 14px;
+  width: 420px; max-width: calc(100vw - 32px);
+  padding: 22px 22px 18px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+}
+.modal-wide { width: 640px; }
+.modal h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 14px; }
+.modal-sub { font-size: 12px; color: var(--text-dim); margin: -6px 0 14px; }
+.field { margin-bottom: 14px; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field label {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.3px; color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.field label .aux {
+  color: var(--text); font-weight: 500;
+  text-transform: none; letter-spacing: 0; font-size: 12px;
+}
+.field input, .field select, .field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background-color: var(--bg);
+}
+.field input[type="range"] { padding: 0; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.modal-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  margin-top: 16px; align-items: center;
+}
+.modal-actions .spacer { flex: 1; }
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.template-card {
+  appearance: none;
+  text-align: left;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.template-card:hover { border-color: var(--accent); background-color: var(--bg-soft); }
+.template-card .tc-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.template-card .tc-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
+.template-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- 10. Buttons + add-lane + controls + toast + footer ---------- */
+.add-lane-btn {
+  display: block; width: 100%;
+  appearance: none;
+  border: 1.5px dashed var(--border-strong); background: transparent;
+  color: var(--text-dim);
+  padding: 12px; margin-top: 16px;
+  border-radius: 10px;
+  font-size: 12px; font-weight: 500; font-family: inherit;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+.add-lane-btn:hover { border-color: var(--accent); color: var(--accent); background-color: var(--accent-soft-bg); }
+.add-lane-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.controls {
+  display: flex; gap: 10px; align-items: center;
+  margin-top: 16px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-dim);
+}
+.btn {
+  appearance: none;
+  border: 1px solid var(--border); background-color: var(--bg); color: var(--text);
+  padding: 5px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 500; cursor: pointer;
+  font-family: inherit;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.btn:hover { border-color: var(--border-strong); background-color: var(--bg-soft); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn.primary { background-color: var(--text); color: var(--bg); border-color: var(--text); }
+.btn.primary:hover { opacity: 0.9; }
+.btn.danger { color: #991B1B; border-color: #FEE2E2; background: #FEF2F2; }
+[data-theme="dark"] .btn.danger { color: #FCA5A5; border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.12); }
+.muted { color: var(--text-muted); font-size: 10.5px; margin-left: auto; }
+
+.footer {
+  display: flex; gap: 6px; align-items: center;
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-muted);
+}
+.footer a { color: var(--text-dim); text-decoration: none; }
+.footer a:hover { color: var(--text); text-decoration: underline; }
+.footer .dot-sep { opacity: 0.5; }
+
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background-color: var(--toast-bg); color: var(--toast-fg);
+  padding: 8px 14px; border-radius: 8px;
+  font-size: 12px; font-weight: 500;
+  opacity: 0; pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+  z-index: 200;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-2px); }
+.toast.error { background: #991B1B; color: #FFFFFF; }
+
+/* ---------- 11. Mobile + print + reduced motion ---------- */
+@media (max-width: 767px) {
+  .page { padding: 16px; }
+  .head { flex-direction: column; align-items: stretch; }
+  .head-right { align-items: flex-start; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .toolbar { gap: 12px; }
+  .toolbar-actions { flex-wrap: wrap; }
+  h1 { font-size: 22px; }
+
+  /* Horizontal scroll for the roadmap grid on mobile */
+  .axis, #lanes {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .axis {
+    min-width: 720px;
+  }
+  .lane {
+    min-width: 720px;
+  }
+  .lane-head { position: sticky; left: 0; background-color: var(--lane-bg); z-index: 4; padding-right: 8px; }
+}
+
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  html, body { background-color: #FFFFFF; color: #000000; }
+  .toolbar-actions, .head-tools, .year-pills, .lane-actions, .add-lane-btn,
+  .controls, .footer, .resize { display: none; }
+  .page { padding: 0; max-width: none; }
+  #lanes { box-shadow: none; break-inside: avoid; }
+  .card { break-inside: avoid; box-shadow: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+</style>
+</head>
+<body data-theme="light">
+<div class="page" id="page">
+
+  <div class="head">
+    <div class="head-left">
+      <div class="eyebrow" id="eyebrow" contenteditable="true" spellcheck="false" data-placeholder="Product · 2026">Product · 2026</div>
+      <h1 id="title" contenteditable="true" spellcheck="false" data-placeholder="Roadmap title">Roadbook</h1>
+    </div>
+    <div class="head-right">
+      <div class="year-pills" id="yearPills" role="tablist" aria-label="Year">
+        <button class="year-pill active" data-year="2026" role="tab" aria-selected="true">2026</button>
+        <button class="year-pill" data-year="2027" role="tab" aria-selected="false">2027</button>
+      </div>
+      <div class="head-tools">
+        <button class="icon-btn" id="undoBtn" title="Undo (⌘Z)" aria-label="Undo">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h6.5a3 3 0 010 6H6"/><path d="M7 5L4 8l3 3"/></svg>
+        </button>
+        <button class="icon-btn" id="redoBtn" title="Redo (⌘⇧Z)" aria-label="Redo">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8H5.5a3 3 0 000 6H10"/><path d="M9 5l3 3-3 3"/></svg>
+        </button>
+        <button class="icon-btn" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 9.5A5 5 0 016.5 3a5.5 5.5 0 1 0 6.5 6.5z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="legend">
+      <div class="legend-row">
+        <span class="label">Status</span>
+        <span><span class="dot dot-planned"></span>Planned</span>
+        <span><span class="dot dot-funded"></span>Funded</span>
+        <span><span class="dot dot-soon"></span>Coming Soon</span>
+        <span><span class="dot dot-pending"></span>Pending</span>
+        <span><span class="dot dot-conditional"></span>If Capacity</span>
+      </div>
+      <div class="legend-row">
+        <span class="label">Type</span>
+        <span><span class="stripe stripe-build"></span>Build</span>
+        <span><span class="stripe stripe-data"></span>Data</span>
+        <span><span class="stripe stripe-polish"></span>Polish</span>
+      </div>
+    </div>
+    <div class="toolbar-actions">
+      <button class="icon-btn" id="importBtn" title="Import roadmap from JSON" aria-label="Import JSON">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V2"/><path d="M5 8l3 3 3-3"/><path d="M3 13h10"/></svg>
+        Import
+      </button>
+      <button class="icon-btn" id="exportBtn" title="Export roadmap as JSON" aria-label="Export JSON">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9"/><path d="M5 8l3 3 3-3"/><path d="M3 13h10"/></svg>
+        Export
+      </button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <span class="divider" aria-hidden="true"></span>
+      <button class="icon-btn" id="shareLink" title="Copy shareable link" aria-label="Copy share link">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9a3 3 0 014.2 0l1.4-1.4a3 3 0 00-4.2-4.2L7 4.8"/><path d="M9 7a3 3 0 01-4.2 0L3.4 8.4a3 3 0 004.2 4.2L9 11.2"/></svg>
+        Link
+      </button>
+      <button class="icon-btn" id="sharePng" title="Copy roadmap PNG" aria-label="Copy PNG">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.2"/><path d="M3 12l3.5-3.5L9 11l2-2 3 3"/></svg>
+        PNG
+      </button>
+      <button class="icon-btn" id="shareSvg" title="Download SVG" aria-label="Download SVG">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h10"/><path d="M5 9l3 3 3-3"/><path d="M8 3v9"/></svg>
+        SVG
+      </button>
+    </div>
+  </div>
+
+  <div class="axis">
+    <div class="year" id="axisYear">2026</div>
+    <div class="q">Q1</div>
+    <div class="q">Q2</div>
+    <div class="q">Q3</div>
+    <div class="q">Q4</div>
+  </div>
+
+  <div id="lanes" role="list" aria-label="Swim lanes"></div>
+
+  <button class="add-lane-btn" id="addLane">+ Add swim lane</button>
+
+  <div class="controls">
+    <button class="btn" id="reset">Templates / Reset</button>
+    <button class="btn" id="accentBtn" title="Set accent color">Accent color</button>
+    <input type="color" id="accentInput" value="#6366F1" hidden>
+    <span class="muted" id="status">Changes auto-save in this browser.</span>
+  </div>
+
+  <footer class="footer">
+    <span>Roadbook</span>
+    <span class="dot-sep">·</span>
+    <a href="https://github.com/deepuasok/roadbook" target="_blank" rel="noopener">github</a>
+    <span class="dot-sep">·</span>
+    <span class="muted">v0.1</span>
+  </footer>
+
+</div>
+
+<div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <h3 id="modalTitle">Edit item</h3>
+    <div class="field">
+      <label for="fTitle">Title</label>
+      <input type="text" id="fTitle" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="fDue">Due date</label>
+        <input type="date" id="fDue" />
+      </div>
+      <div class="field">
+        <label for="fStatus">Status</label>
+        <select id="fStatus">
+          <option value="planned">Planned</option>
+          <option value="funded">Funded</option>
+          <option value="soon">Coming Soon</option>
+          <option value="pending">Pending</option>
+          <option value="conditional">If Capacity</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fType">Type</label>
+      <select id="fType">
+        <option value="other">Other (no color)</option>
+        <option value="build">Build</option>
+        <option value="data">Data</option>
+        <option value="polish">Polish</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="fComplete">Completion <span class="aux" id="fCompleteVal">0%</span></label>
+      <input type="range" id="fComplete" min="0" max="100" step="5" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger" id="mDelete">Remove</button>
+      <div class="spacer"></div>
+      <button class="btn" id="mCancel">Cancel</button>
+      <button class="btn primary" id="mSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="templateOverlay" role="dialog" aria-modal="true" aria-labelledby="templateTitle">
+  <div class="modal modal-wide">
+    <h3 id="templateTitle">Start with a template</h3>
+    <p class="modal-sub">Pick a starter, or start blank. Your current roadmap will be replaced.</p>
+    <div class="template-grid" id="templateGrid"></div>
+    <div class="modal-actions">
+      <div class="spacer"></div>
+      <button class="btn" id="tCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":1,"title":"Roadbook","eyebrow":"Product · 2026","activeYear":"2026","data":{"2026":{"lanes":[{"id":"now","name":"Now","description":"Shipping this quarter.","color":"sage"},{"id":"next","name":"Next","description":"Up next, scoped.","color":"sky"},{"id":"later","name":"Later","description":"On the radar, not scoped.","color":"blush"}],"items":[]},"2027":{"lanes":[],"items":[]}}},"engineering-sprint":{"roadbookVersion":1,"title":"Engineering Roadmap","eyebrow":"Now / Next / Later","activeYear":"2026","data":{"2026":{"lanes":[{"id":"frontend","name":"Frontend","description":"Web app, design system, perf.","color":"sky"},{"id":"backend","name":"Backend","description":"APIs, services, data.","color":"sage"},{"id":"infra","name":"Infra","description":"Deploy, observability, cost.","color":"stone"}],"items":[{"id":"fe1","laneId":"frontend","title":"Design system v2","start":1,"span":2,"row":0,"status":"funded","type":"polish","due":"","complete":30},{"id":"fe2","laneId":"frontend","title":"Bundle size budget","start":1,"span":1,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"fe3","laneId":"frontend","title":"Server components","start":3,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be1","laneId":"backend","title":"GraphQL gateway","start":1,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"be2","laneId":"backend","title":"Auth refactor","start":2,"span":1,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"be3","laneId":"backend","title":"Event bus (Kafka)","start":3,"span":2,"row":0,"status":"pending","type":"data","due":"","complete":0},{"id":"in1","laneId":"infra","title":"K8s cluster upgrade","start":1,"span":1,"row":0,"status":"funded","type":"build","due":"","complete":50},{"id":"in2","laneId":"infra","title":"Trace sampling tuning","start":2,"span":1,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"in3","laneId":"infra","title":"Cost rightsizing","start":2,"span":2,"row":1,"status":"planned","type":"polish","due":"","complete":0},{"id":"in4","laneId":"infra","title":"DR runbook","start":4,"span":1,"row":0,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"lanes":[],"items":[]}}},"product-launch":{"roadbookVersion":1,"title":"Product Launch 2026","eyebrow":"Launch plan","activeYear":"2026","data":{"2026":{"lanes":[{"id":"discovery","name":"Discovery","description":"Research and validation before build.","color":"sky"},{"id":"build","name":"Build","description":"Engineering and core feature work.","color":"sage"},{"id":"beta","name":"Beta","description":"Early customers, feedback loops.","color":"lemon"},{"id":"launch","name":"Launch","description":"GA, marketing, scale.","color":"coral"}],"items":[{"id":"d1","laneId":"discovery","title":"Customer interviews","start":1,"span":1,"row":0,"status":"funded","type":"data","due":"","complete":40},{"id":"d2","laneId":"discovery","title":"Pricing research","start":1,"span":2,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"b1","laneId":"build","title":"Core MVP","start":2,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b2","laneId":"build","title":"Onboarding flow","start":3,"span":1,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"b3","laneId":"build","title":"Payments integration","start":3,"span":1,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"be1","laneId":"beta","title":"Closed beta (10 users)","start":3,"span":1,"row":0,"status":"soon","type":"polish","due":"","complete":0},{"id":"be2","laneId":"beta","title":"Open beta","start":4,"span":1,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"l1","laneId":"launch","title":"GA release","start":4,"span":1,"row":0,"status":"conditional","type":"build","due":"","complete":0}]},"2027":{"lanes":[],"items":[]}}},"saas-quarterly":{"roadbookVersion":1,"title":"SaaS Roadmap 2026","eyebrow":"Product · Quarterly","activeYear":"2026","data":{"2026":{"lanes":[{"id":"growth","name":"Growth","description":"Acquisition, activation, retention.","color":"mint"},{"id":"product","name":"Product","description":"Features customers will pay more for.","color":"lavender"},{"id":"platform","name":"Platform","description":"Reliability, scale, developer velocity.","color":"stone"}],"items":[{"id":"g1","laneId":"growth","title":"Self-serve signup","start":1,"span":1,"row":0,"status":"funded","type":"build","due":"","complete":60},{"id":"g2","laneId":"growth","title":"Referral program","start":2,"span":1,"row":0,"status":"planned","type":"polish","due":"","complete":0},{"id":"g3","laneId":"growth","title":"Lifecycle emails","start":2,"span":2,"row":1,"status":"planned","type":"data","due":"","complete":0},{"id":"g4","laneId":"growth","title":"Pricing experiments","start":3,"span":2,"row":0,"status":"soon","type":"data","due":"","complete":0},{"id":"p1","laneId":"product","title":"Workspaces & teams","start":1,"span":2,"row":0,"status":"funded","type":"build","due":"","complete":25},{"id":"p2","laneId":"product","title":"Bulk import / export","start":2,"span":1,"row":1,"status":"planned","type":"build","due":"","complete":0},{"id":"p3","laneId":"product","title":"API v2","start":3,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"p4","laneId":"product","title":"Mobile app","start":4,"span":1,"row":1,"status":"pending","type":"build","due":"","complete":0},{"id":"x1","laneId":"platform","title":"Migrate to Postgres 16","start":1,"span":1,"row":0,"status":"planned","type":"data","due":"","complete":0},{"id":"x2","laneId":"platform","title":"SSO / SAML","start":2,"span":1,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x3","laneId":"platform","title":"Multi-region rollout","start":3,"span":2,"row":0,"status":"planned","type":"build","due":"","complete":0},{"id":"x4","laneId":"platform","title":"SOC2 audit","start":4,"span":1,"row":1,"status":"conditional","type":"polish","due":"","complete":0}]},"2027":{"lanes":[],"items":[]}}}};
+</script>
+<script>
+// state.js — store, persistence, history (undo/redo)
+// Exposes a single global: window.Roadbook.state
+(function () {
+  const PREFIX = "roadbook";
+  const ACCENT_KEY = `${PREFIX}-accent`;
+  const THEME_KEY = `${PREFIX}-theme`;
+  const META_KEY = `${PREFIX}-meta`;
+  const YEAR_KEY = `${PREFIX}-active-year`;
+  const LAYOUT_KEY = (y) => `${PREFIX}-layout-${y}`;
+  const SCHEMA_VERSION = 1;
+  const HISTORY_LIMIT = 50;
+
+  const PALETTE = [
+    "cream", "sage", "blush", "mint", "peach", "rose",
+    "sky", "lavender", "lemon", "coral", "stone", "periwinkle"
+  ];
+
+  const DEFAULTS = {
+    title: "Roadbook",
+    eyebrow: "Product · 2026",
+    accent: "#6366F1",
+    theme: "light",
+    activeYear: "2026",
+    data: {
+      "2026": { lanes: [], items: [] },
+      "2027": { lanes: [], items: [] }
+    }
+  };
+
+  const store = {
+    title: DEFAULTS.title,
+    eyebrow: DEFAULTS.eyebrow,
+    accent: DEFAULTS.accent,
+    theme: DEFAULTS.theme,
+    activeYear: DEFAULTS.activeYear,
+    data: {
+      "2026": { lanes: [], items: [] },
+      "2027": { lanes: [], items: [] }
+    },
+    history: [],
+    historyIndex: -1
+  };
+
+  function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
+
+  function load() {
+    try {
+      const metaRaw = localStorage.getItem(META_KEY);
+      if (metaRaw) {
+        const m = JSON.parse(metaRaw);
+        store.title = m.title || DEFAULTS.title;
+        store.eyebrow = m.eyebrow || DEFAULTS.eyebrow;
+      }
+      store.accent = localStorage.getItem(ACCENT_KEY) || DEFAULTS.accent;
+      store.theme = localStorage.getItem(THEME_KEY) || DEFAULTS.theme;
+      store.activeYear = localStorage.getItem(YEAR_KEY) === "2027" ? "2027" : "2026";
+
+      ["2026", "2027"].forEach((y) => {
+        const raw = localStorage.getItem(LAYOUT_KEY(y));
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            store.data[y] = normalizeYear(parsed);
+          } catch (_) {
+            store.data[y] = { lanes: [], items: [] };
+          }
+        }
+      });
+    } catch (_) {
+      // Carry on with defaults
+    }
+
+    // Backfill missing lane colors
+    ["2026", "2027"].forEach((y) => {
+      (store.data[y].lanes || []).forEach((l, i) => {
+        if (!l.color) l.color = PALETTE[i % PALETTE.length];
+      });
+    });
+
+    snapshot();
+  }
+
+  function normalizeYear(y) {
+    const out = { lanes: [], items: [] };
+    if (y && Array.isArray(y.lanes)) {
+      out.lanes = y.lanes.map((l, i) => ({
+        id: l.id || `lane-${i}-${Math.random().toString(36).slice(2, 7)}`,
+        name: String(l.name || "Untitled lane"),
+        description: String(l.description || ""),
+        color: PALETTE.includes(l.color) ? l.color : PALETTE[i % PALETTE.length]
+      }));
+    }
+    if (y && Array.isArray(y.items)) {
+      out.items = y.items.map((it, i) => ({
+        id: it.id || `it-${i}-${Math.random().toString(36).slice(2, 7)}`,
+        laneId: String(it.laneId || (out.lanes[0] && out.lanes[0].id) || ""),
+        title: String(it.title || "Untitled"),
+        start: clamp(parseInt(it.start, 10) || 1, 1, 4),
+        span: clamp(parseInt(it.span, 10) || 1, 1, 4),
+        row: Math.max(0, parseInt(it.row, 10) || 0),
+        status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
+        type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
+        due: typeof it.due === "string" ? it.due : "",
+        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
+      }));
+    }
+    return out;
+  }
+
+  function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+
+  function persist() {
+    try {
+      localStorage.setItem(META_KEY, JSON.stringify({
+        title: store.title,
+        eyebrow: store.eyebrow,
+        schema: SCHEMA_VERSION
+      }));
+      localStorage.setItem(ACCENT_KEY, store.accent);
+      localStorage.setItem(THEME_KEY, store.theme);
+      localStorage.setItem(YEAR_KEY, store.activeYear);
+      ["2026", "2027"].forEach((y) => {
+        localStorage.setItem(LAYOUT_KEY(y), JSON.stringify(store.data[y]));
+      });
+    } catch (_) { /* storage full or disabled */ }
+  }
+
+  // ---------- History ----------
+  function captureState() {
+    return {
+      title: store.title,
+      eyebrow: store.eyebrow,
+      activeYear: store.activeYear,
+      data: deepCopy(store.data)
+    };
+  }
+
+  function applyState(snap) {
+    store.title = snap.title;
+    store.eyebrow = snap.eyebrow;
+    store.activeYear = snap.activeYear;
+    store.data = deepCopy(snap.data);
+  }
+
+  function snapshot() {
+    // Truncate forward history when a new action lands after undo
+    store.history = store.history.slice(0, store.historyIndex + 1);
+    store.history.push(captureState());
+    if (store.history.length > HISTORY_LIMIT) {
+      store.history.shift();
+    } else {
+      store.historyIndex++;
+    }
+    store.historyIndex = store.history.length - 1;
+  }
+
+  function canUndo() { return store.historyIndex > 0; }
+  function canRedo() { return store.historyIndex < store.history.length - 1; }
+
+  function undo() {
+    if (!canUndo()) return false;
+    store.historyIndex--;
+    applyState(store.history[store.historyIndex]);
+    persist();
+    return true;
+  }
+
+  function redo() {
+    if (!canRedo()) return false;
+    store.historyIndex++;
+    applyState(store.history[store.historyIndex]);
+    persist();
+    return true;
+  }
+
+  // ---------- Public API ----------
+  function currentYear() { return store.data[store.activeYear]; }
+  function findItem(id) { return currentYear().items.find((i) => i.id === id); }
+  function findLane(id) { return currentYear().lanes.find((l) => l.id === id); }
+
+  // commit(mutator) — wraps mutation in snapshot + persist
+  function commit(mutator) {
+    mutator();
+    persist();
+    snapshot();
+  }
+
+  // commitSilent — mutates + persists but does not push history (used for live drag)
+  function commitSilent(mutator) {
+    mutator();
+    persist();
+  }
+
+  function setActiveYear(year) {
+    if (year !== "2026" && year !== "2027") return;
+    if (store.activeYear === year) return;
+    commit(() => { store.activeYear = year; });
+  }
+
+  function setTitle(t) {
+    if (t === store.title) return;
+    commit(() => { store.title = String(t || "Roadbook").slice(0, 120); });
+  }
+
+  function setEyebrow(t) {
+    if (t === store.eyebrow) return;
+    commit(() => { store.eyebrow = String(t || "").slice(0, 80); });
+  }
+
+  function setAccent(hex) {
+    store.accent = hex;
+    persist();
+  }
+
+  function setTheme(t) {
+    store.theme = t === "dark" ? "dark" : "light";
+    persist();
+  }
+
+  function replaceAll(payload) {
+    // Used by template loader and JSON import
+    commit(() => {
+      if (payload.title) store.title = String(payload.title).slice(0, 120);
+      if (payload.eyebrow) store.eyebrow = String(payload.eyebrow).slice(0, 80);
+      if (payload.activeYear === "2026" || payload.activeYear === "2027") {
+        store.activeYear = payload.activeYear;
+      }
+      if (payload.data) {
+        ["2026", "2027"].forEach((y) => {
+          if (payload.data[y]) store.data[y] = normalizeYear(payload.data[y]);
+        });
+      }
+    });
+  }
+
+  function exportJSON() {
+    return {
+      roadbookVersion: SCHEMA_VERSION,
+      title: store.title,
+      eyebrow: store.eyebrow,
+      activeYear: store.activeYear,
+      data: deepCopy(store.data)
+    };
+  }
+
+  function uid(prefix) {
+    return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  // Expose
+  window.Roadbook = window.Roadbook || {};
+  window.Roadbook.state = {
+    PALETTE,
+    SCHEMA_VERSION,
+    load,
+    persist,
+    snapshot,
+    commit,
+    commitSilent,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    currentYear,
+    findItem,
+    findLane,
+    setActiveYear,
+    setTitle,
+    setEyebrow,
+    setAccent,
+    setTheme,
+    replaceAll,
+    exportJSON,
+    normalizeYear,
+    uid,
+    get: () => store
+  };
+})();
+
+
+// drag.js — pointer-event drag, drop, resize (works for mouse + touch)
+(function () {
+  const ROW_H = 34;
+
+  let dragState = null; // { id, pointerId, originLane, originStart, originSpan, originRow, mode: 'move'|'resize' }
+
+  function attachCard(card) {
+    card.addEventListener("pointerdown", onPointerDown);
+    const handle = card.querySelector(".resize");
+    if (handle) handle.addEventListener("pointerdown", onResizeStart);
+  }
+
+  function onResizeStart(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const card = e.currentTarget.closest(".card");
+    if (!card) return;
+    const body = card.closest(".lane-body");
+    const rect = body.getBoundingClientRect();
+    const colW = rect.width / 4;
+    const item = window.Roadbook.state.findItem(card.dataset.id);
+    if (!item) return;
+
+    card.setPointerCapture(e.pointerId);
+
+    dragState = {
+      mode: "resize",
+      id: card.dataset.id,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      colW,
+      initialSpan: item.span,
+      card
+    };
+    card.classList.add("selected");
+
+    e.currentTarget.addEventListener("pointermove", onResizeMove);
+    e.currentTarget.addEventListener("pointerup", onResizeEnd);
+    e.currentTarget.addEventListener("pointercancel", onResizeEnd);
+  }
+
+  function onResizeMove(e) {
+    if (!dragState || dragState.mode !== "resize") return;
+    const item = window.Roadbook.state.findItem(dragState.id);
+    if (!item) return;
+    const dx = e.clientX - dragState.startX;
+    const dSpan = Math.round(dx / dragState.colW);
+    const newSpan = Math.max(1, Math.min(5 - item.start, dragState.initialSpan + dSpan));
+    if (newSpan !== item.span) {
+      window.Roadbook.state.commitSilent(() => { item.span = newSpan; });
+      dragState.card.style.setProperty("--span", newSpan);
+    }
+  }
+
+  function onResizeEnd(e) {
+    if (!dragState) return;
+    try { e.currentTarget.releasePointerCapture(dragState.pointerId); } catch (_) {}
+    e.currentTarget.removeEventListener("pointermove", onResizeMove);
+    e.currentTarget.removeEventListener("pointerup", onResizeEnd);
+    e.currentTarget.removeEventListener("pointercancel", onResizeEnd);
+    // Push a single history entry for the whole resize
+    window.Roadbook.state.snapshot();
+    dragState = null;
+  }
+
+  function onPointerDown(e) {
+    if (e.target.classList && e.target.classList.contains("resize")) return;
+    if (e.button !== 0 && e.button !== undefined && e.pointerType === "mouse") return;
+    const card = e.currentTarget;
+    const id = card.dataset.id;
+    const item = window.Roadbook.state.findItem(id);
+    if (!item) return;
+
+    const body = card.closest(".lane-body");
+    const startRect = body.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
+
+    dragState = {
+      mode: "move",
+      id,
+      pointerId: e.pointerId,
+      startX, startY,
+      originLane: item.laneId,
+      originStart: item.start,
+      originRow: item.row,
+      colW: startRect.width / 4,
+      card
+    };
+
+    card.setPointerCapture(e.pointerId);
+    card.addEventListener("pointermove", onPointerMove);
+    card.addEventListener("pointerup", onPointerUp);
+    card.addEventListener("pointercancel", onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!dragState || dragState.mode !== "move") return;
+    const dx = e.clientX - dragState.startX;
+    const dy = e.clientY - dragState.startY;
+    if (!dragState.dragging && Math.hypot(dx, dy) < 4) return;
+
+    if (!dragState.dragging) {
+      dragState.dragging = true;
+      dragState.card.classList.add("dragging");
+    }
+
+    // Detect the lane currently under the pointer
+    const laneEl = elementLaneBodyAt(e.clientX, e.clientY);
+    if (!laneEl) return;
+    const rect = laneEl.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const item = window.Roadbook.state.findItem(dragState.id);
+    if (!item) return;
+    const quarter = Math.max(1, Math.min(4, Math.floor(x / (rect.width / 4)) + 1));
+    const row = Math.max(0, Math.floor(y / ROW_H));
+    const start = Math.max(1, Math.min(quarter, 5 - item.span));
+    showGhost(laneEl, start, item.span, row);
+    dragState.dropTarget = { laneId: laneEl.dataset.lane, start, row };
+  }
+
+  function onPointerUp(e) {
+    if (!dragState) return;
+    const card = dragState.card;
+    try { card.releasePointerCapture(dragState.pointerId); } catch (_) {}
+    card.removeEventListener("pointermove", onPointerMove);
+    card.removeEventListener("pointerup", onPointerUp);
+    card.removeEventListener("pointercancel", onPointerUp);
+
+    const dragging = dragState.dragging;
+    const drop = dragState.dropTarget;
+    card.classList.remove("dragging");
+    hideGhosts();
+
+    if (!dragging) {
+      // Treat as click
+      dragState = null;
+      window.Roadbook.modal.open(card.dataset.id);
+      return;
+    }
+
+    if (drop) {
+      const item = window.Roadbook.state.findItem(dragState.id);
+      if (item) {
+        const oldLane = item.laneId;
+        const changed = (item.start !== drop.start || item.row !== drop.row || item.laneId !== drop.laneId);
+        if (changed) {
+          window.Roadbook.state.commit(() => {
+            item.start = drop.start;
+            item.row = drop.row;
+            item.laneId = drop.laneId;
+          });
+        }
+        const newCard = window.Roadbook.app.replaceCard(item, oldLane);
+        if (newCard) attachCard(newCard);
+        window.Roadbook.app.resizeLaneBody(oldLane);
+        window.Roadbook.app.resizeLaneBody(drop.laneId);
+      }
+    }
+    dragState = null;
+  }
+
+  function elementLaneBodyAt(x, y) {
+    const stack = document.elementsFromPoint(x, y);
+    return stack.find((el) => el.classList && el.classList.contains("lane-body")) || null;
+  }
+
+  function showGhost(body, start, span, row) {
+    document.querySelectorAll(".ghost").forEach((g) => g.classList.remove("show"));
+    const g = body.querySelector(".ghost");
+    if (!g) return;
+    g.style.left = `calc((${start} - 1) * 25%)`;
+    g.style.width = `calc(${span} * 25% - 6px)`;
+    g.style.top = `${row * ROW_H}px`;
+    g.classList.add("show");
+  }
+  function hideGhosts() {
+    document.querySelectorAll(".ghost").forEach((g) => g.classList.remove("show"));
+  }
+
+  window.Roadbook = window.Roadbook || {};
+  window.Roadbook.drag = { attachCard, ROW_H };
+})();
+
+
+// modal.js — edit-item modal with focus trap
+(function () {
+  let editingId = null;
+  let prevFocus = null;
+
+  function open(itemId) {
+    const item = window.Roadbook.state.findItem(itemId);
+    if (!item) return;
+    editingId = itemId;
+    prevFocus = document.activeElement;
+
+    document.getElementById("fTitle").value = item.title;
+    document.getElementById("fDue").value = item.due || "";
+    document.getElementById("fStatus").value = item.status || "planned";
+    document.getElementById("fType").value = item.type || "other";
+    const complete = item.complete || 0;
+    document.getElementById("fComplete").value = complete;
+    document.getElementById("fCompleteVal").textContent = complete + "%";
+    document.getElementById("modalTitle").textContent = `Edit · ${item.title}`;
+    document.getElementById("modalOverlay").classList.add("show");
+    setTimeout(() => document.getElementById("fTitle").focus(), 40);
+  }
+
+  function close() {
+    editingId = null;
+    document.getElementById("modalOverlay").classList.remove("show");
+    if (prevFocus && typeof prevFocus.focus === "function") {
+      try { prevFocus.focus(); } catch (_) {}
+    }
+    prevFocus = null;
+  }
+
+  function save() {
+    if (!editingId) return;
+    const item = window.Roadbook.state.findItem(editingId);
+    if (!item) return;
+    const next = {
+      title: document.getElementById("fTitle").value.trim() || item.title,
+      due: document.getElementById("fDue").value,
+      status: document.getElementById("fStatus").value,
+      type: document.getElementById("fType").value,
+      complete: parseInt(document.getElementById("fComplete").value, 10) || 0
+    };
+    const changed = Object.keys(next).some((k) => next[k] !== item[k]);
+    if (changed) {
+      window.Roadbook.state.commit(() => Object.assign(item, next));
+      window.Roadbook.app.updateCardDom(item);
+    }
+    close();
+    if (changed) window.Roadbook.app.toast(`Saved "${item.title}"`);
+  }
+
+  function remove() {
+    if (!editingId) return;
+    const item = window.Roadbook.state.findItem(editingId);
+    if (!item) return;
+    if (!confirm(`Delete "${item.title}"?`)) return;
+    const laneId = item.laneId;
+    const itemId = editingId;
+    window.Roadbook.state.commit(() => {
+      const y = window.Roadbook.state.currentYear();
+      y.items = y.items.filter((i) => i.id !== itemId);
+    });
+    const card = document.querySelector(`.card[data-id="${itemId}"]`);
+    if (card) card.remove();
+    window.Roadbook.app.resizeLaneBody(laneId);
+    close();
+    window.Roadbook.app.toast("Deleted");
+  }
+
+  function isOpen() {
+    return document.getElementById("modalOverlay").classList.contains("show");
+  }
+
+  // Focus trap when modal is open
+  function trapFocus(e) {
+    const overlay = document.getElementById("modalOverlay");
+    if (!overlay.classList.contains("show")) return;
+    if (e.key !== "Tab") return;
+    const focusable = overlay.querySelectorAll(
+      'input, select, textarea, button, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  }
+
+  function wire() {
+    document.getElementById("mCancel").addEventListener("click", close);
+    document.getElementById("mSave").addEventListener("click", save);
+    document.getElementById("mDelete").addEventListener("click", remove);
+    document.getElementById("modalOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "modalOverlay") close();
+    });
+    document.getElementById("fComplete").addEventListener("input", (e) => {
+      document.getElementById("fCompleteVal").textContent = e.target.value + "%";
+    });
+    document.getElementById("fTitle").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); save(); }
+    });
+    document.addEventListener("keydown", trapFocus);
+  }
+
+  window.Roadbook = window.Roadbook || {};
+  window.Roadbook.modal = { open, close, save, remove, wire, isOpen };
+})();
+
+
+// share.js — PNG (html2canvas), SVG (native), JSON import/export, URL-hash share
+(function () {
+  const HTML2CANVAS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+  let html2canvasLoading = null;
+
+  function ensureHtml2Canvas() {
+    if (typeof window.html2canvas !== "undefined") return Promise.resolve(window.html2canvas);
+    if (html2canvasLoading) return html2canvasLoading;
+    html2canvasLoading = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = HTML2CANVAS_CDN;
+      s.onload = () => resolve(window.html2canvas);
+      s.onerror = () => reject(new Error("Failed to load html2canvas (offline?)"));
+      document.head.appendChild(s);
+    });
+    return html2canvasLoading;
+  }
+
+  // ---------- PNG ----------
+  async function copyPng() {
+    let h2c;
+    try {
+      h2c = await ensureHtml2Canvas();
+    } catch (e) {
+      window.Roadbook.app.toast("PNG needs network for html2canvas — try SVG", true);
+      return;
+    }
+    const page = document.getElementById("page");
+    try {
+      const canvas = await h2c(page, {
+        backgroundColor: getComputedStyle(document.body).getPropertyValue("--bg") || "#FFFFFF",
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
+      canvas.toBlob(async (blob) => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          window.Roadbook.app.toast("PNG copied to clipboard");
+        } catch (_) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${slug(window.Roadbook.state.get().title)}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+          window.Roadbook.app.toast("Clipboard blocked — downloaded PNG instead");
+        }
+      }, "image/png");
+    } catch (e) {
+      window.Roadbook.app.toast(`PNG failed: ${e.message || e}`, true);
+    }
+  }
+
+  // ---------- SVG ----------
+  function buildSvg() {
+    const s = window.Roadbook.state.get();
+    const year = s.activeYear;
+    const data = s.data[year];
+    const W = 1200;
+    const ROW_H = 34;
+    const LANE_HEAD_W = 140;
+    const LANE_PAD = 16;
+    const GRID_X = LANE_HEAD_W + LANE_PAD + 12;
+    const GRID_W = W - GRID_X - LANE_PAD;
+    const QUARTER_W = GRID_W / 4;
+    const HEADER_H = 96;
+
+    const styleVar = (k) => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+    const text = styleVar("--text") || "#0A0A0A";
+    const textDim = styleVar("--text-dim") || "#6B7280";
+    const textMuted = styleVar("--text-muted") || "#9CA3AF";
+    const bg = styleVar("--bg") || "#FFFFFF";
+    const border = styleVar("--border") || "#E5E7EB";
+
+    const laneBg = (color) => styleVar(`--lane-${color}`) || "#FEFBEF";
+
+    const typeColor = (t) => ({
+      build: styleVar("--type-build") || "#3B82F6",
+      data: styleVar("--type-data") || "#8B5CF6",
+      polish: styleVar("--type-polish") || "#14B8A6"
+    })[t] || "transparent";
+
+    const statusColor = (st) => ({
+      planned: styleVar("--status-planned") || "#111827",
+      funded: styleVar("--status-funded") || "#10B981",
+      soon: styleVar("--status-soon") || "#F59E0B",
+      pending: styleVar("--status-pending") || "#DC2626",
+      conditional: styleVar("--status-conditional") || "#D1D5DB"
+    })[st] || "#111827";
+
+    // Compute total height
+    let laneRowMax = data.lanes.map(() => 0);
+    data.items.forEach((it) => {
+      const li = data.lanes.findIndex((l) => l.id === it.laneId);
+      if (li >= 0) laneRowMax[li] = Math.max(laneRowMax[li], it.row + 1);
+    });
+    const laneHeights = laneRowMax.map((r) => Math.max(1, r) * ROW_H + 32);
+    const totalLaneH = laneHeights.reduce((a, b) => a + b, 0);
+    const H = HEADER_H + 24 + totalLaneH + 48;
+
+    const out = [];
+    out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="-apple-system, system-ui, sans-serif">`);
+    out.push(`<rect width="${W}" height="${H}" fill="${bg}"/>`);
+
+    // Header
+    out.push(`<text x="${LANE_PAD}" y="32" font-size="11" font-weight="600" fill="${textMuted}" letter-spacing="0.8">${escapeXml(String(s.eyebrow || "").toUpperCase())}</text>`);
+    out.push(`<text x="${LANE_PAD}" y="62" font-size="26" font-weight="700" fill="${text}" letter-spacing="-0.5">${escapeXml(s.title || "Roadbook")}</text>`);
+
+    // Year axis
+    const axisY = HEADER_H + 12;
+    out.push(`<text x="${LANE_PAD}" y="${axisY}" font-size="12" font-weight="600" fill="${text}">${escapeXml(year)}</text>`);
+    for (let q = 1; q <= 4; q++) {
+      const cx = GRID_X + (q - 0.5) * QUARTER_W;
+      out.push(`<text x="${cx}" y="${axisY}" font-size="10" font-weight="600" fill="${textMuted}" text-anchor="middle" letter-spacing="1">Q${q}</text>`);
+    }
+    out.push(`<line x1="${LANE_PAD}" y1="${axisY + 6}" x2="${W - LANE_PAD}" y2="${axisY + 6}" stroke="${border}" stroke-width="1"/>`);
+
+    // Lanes container border
+    const lanesY = axisY + 18;
+    out.push(`<rect x="${LANE_PAD}" y="${lanesY}" width="${W - LANE_PAD * 2}" height="${totalLaneH}" fill="none" stroke="${styleVar("--lane-container-border") || "#EADFC3"}" stroke-width="1" rx="8"/>`);
+
+    let cursorY = lanesY;
+    data.lanes.forEach((lane, idx) => {
+      const lh = laneHeights[idx];
+      // Lane band (pastel) behind title column
+      out.push(`<rect x="${LANE_PAD}" y="${cursorY}" width="${LANE_HEAD_W + 16}" height="${lh}" fill="${laneBg(lane.color || "cream")}"/>`);
+      if (idx < data.lanes.length - 1) {
+        out.push(`<line x1="${LANE_PAD}" y1="${cursorY + lh}" x2="${W - LANE_PAD}" y2="${cursorY + lh}" stroke="${border}" stroke-width="0.7"/>`);
+      }
+      // Lane title
+      out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 26}" font-size="14" font-weight="600" fill="${text}">${escapeXml(lane.name)}</text>`);
+      if (lane.description) {
+        out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 44}" font-size="11" fill="${textDim}">${escapeXml(lane.description)}</text>`);
+      }
+      // Quarter gridlines for this lane
+      for (let q = 1; q <= 3; q++) {
+        const x = GRID_X + q * QUARTER_W;
+        out.push(`<line x1="${x}" y1="${cursorY + 8}" x2="${x}" y2="${cursorY + lh - 8}" stroke="${border}" stroke-width="0.5" stroke-dasharray="2 3" opacity="0.5"/>`);
+      }
+
+      // Items
+      data.items.filter((it) => it.laneId === lane.id).forEach((it) => {
+        const x = GRID_X + (it.start - 1) * QUARTER_W;
+        const w = it.span * QUARTER_W - 6;
+        const y = cursorY + 16 + it.row * ROW_H;
+        const h = 30;
+        // Card body
+        out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${bg}" stroke="${border}" stroke-width="1"/>`);
+        // Type stripe
+        const tc = typeColor(it.type);
+        if (tc !== "transparent") {
+          out.push(`<rect x="${x}" y="${y}" width="3" height="${h}" fill="${tc}" rx="1.5"/>`);
+        }
+        // Completion fill
+        if (it.complete > 0) {
+          const fillW = (it.complete / 100) * w;
+          out.push(`<rect x="${x}" y="${y}" width="${fillW}" height="${h}" rx="6" fill="${styleVar("--fill-pct") || "rgba(16,185,129,0.14)"}"/>`);
+        }
+        // Status dot
+        const sx = x + (tc === "transparent" ? 12 : 14);
+        out.push(`<circle cx="${sx + 3}" cy="${y + h / 2}" r="3.5" fill="${statusColor(it.status)}"/>`);
+        // Title
+        const titleX = sx + 12;
+        const titleMax = w - (titleX - x) - 12;
+        out.push(`<text x="${titleX}" y="${y + h / 2 + 4}" font-size="12" font-weight="500" fill="${text}">${escapeXml(truncate(it.title, Math.max(8, Math.floor(titleMax / 6.2))))}</text>`);
+      });
+
+      cursorY += lh;
+    });
+
+    // Footer credit
+    out.push(`<text x="${W - LANE_PAD}" y="${H - 18}" font-size="10" fill="${textMuted}" text-anchor="end">Built with Roadbook</text>`);
+
+    out.push(`</svg>`);
+    return out.join("\n");
+  }
+
+  function truncate(s, n) {
+    if (!s) return "";
+    return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s;
+  }
+
+  function escapeXml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
+  function downloadSvg() {
+    const svg = buildSvg();
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug(window.Roadbook.state.get().title)}.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    window.Roadbook.app.toast("SVG downloaded");
+  }
+
+  function slug(s) {
+    return String(s || "roadbook").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "roadbook";
+  }
+
+  // ---------- JSON import/export ----------
+  function exportJson() {
+    const payload = window.Roadbook.state.exportJSON();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug(payload.title)}.roadbook.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    window.Roadbook.app.toast("Exported JSON");
+  }
+
+  function triggerImport() {
+    document.getElementById("importFile").click();
+  }
+
+  function handleImport(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const payload = JSON.parse(reader.result);
+        if (!payload || typeof payload !== "object") throw new Error("Not an object");
+        if (!payload.data || !payload.data["2026"]) throw new Error("Missing data.2026");
+        window.Roadbook.state.replaceAll(payload);
+        window.Roadbook.app.fullRender();
+        window.Roadbook.app.toast(`Imported "${payload.title || "roadmap"}"`);
+      } catch (err) {
+        window.Roadbook.app.toast(`Import failed: ${err.message || err}`, true);
+      } finally {
+        e.target.value = "";
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // ---------- URL-hash sharing ----------
+  function encodeShareUrl() {
+    const payload = window.Roadbook.state.exportJSON();
+    const json = JSON.stringify(payload);
+    // Compress using a tiny RLE-ish scheme is overkill — modern UTF-8 + base64url is fine
+    // for typical roadmap sizes (<10KB JSON → ~13KB base64, well under URL limits).
+    const b64 = base64UrlEncode(json);
+    const url = `${location.origin}${location.pathname}#data=${b64}`;
+    return url;
+  }
+
+  function decodeShareUrl() {
+    const hash = location.hash || "";
+    const m = hash.match(/[#&]data=([^&]+)/);
+    if (!m) return null;
+    try {
+      const json = base64UrlDecode(m[1]);
+      return JSON.parse(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function base64UrlEncode(s) {
+    const utf8 = new TextEncoder().encode(s);
+    let bin = "";
+    utf8.forEach((b) => bin += String.fromCharCode(b));
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function base64UrlDecode(s) {
+    const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4);
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  async function copyShareLink() {
+    const url = encodeShareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      window.Roadbook.app.toast("Share link copied");
+    } catch (_) {
+      prompt("Copy this share link:", url);
+    }
+  }
+
+  function maybeLoadFromHash() {
+    const payload = decodeShareUrl();
+    if (payload) {
+      try {
+        window.Roadbook.state.replaceAll(payload);
+        // Clean hash after loading so reload doesn't keep importing
+        history.replaceState(null, "", location.pathname);
+        window.Roadbook.app.toast(`Loaded from link: ${payload.title || "roadmap"}`);
+        return true;
+      } catch (_) { return false; }
+    }
+    return false;
+  }
+
+  window.Roadbook = window.Roadbook || {};
+  window.Roadbook.share = {
+    copyPng,
+    downloadSvg,
+    exportJson,
+    triggerImport,
+    handleImport,
+    copyShareLink,
+    maybeLoadFromHash,
+    buildSvg
+  };
+})();
+
+
+// templates.js — first-run picker + Reset menu
+(function () {
+  const TEMPLATES_META = [
+    { key: "blank",              title: "Blank",              desc: "Three empty lanes (Now / Next / Later) — start fresh." },
+    { key: "product-launch",     title: "Product Launch",     desc: "Discovery → Build → Beta → GA across one year." },
+    { key: "saas-quarterly",     title: "SaaS Quarterly",     desc: "Q1–Q4 with Growth / Product / Platform tracks." },
+    { key: "engineering-sprint", title: "Engineering Sprint", desc: "Now / Next / Later × Frontend / Backend / Infra." }
+  ];
+
+  function open() {
+    const overlay = document.getElementById("templateOverlay");
+    const grid = document.getElementById("templateGrid");
+    grid.innerHTML = "";
+    TEMPLATES_META.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.className = "template-card";
+      btn.type = "button";
+      btn.innerHTML = `
+        <div class="tc-title"></div>
+        <div class="tc-desc"></div>
+      `;
+      btn.querySelector(".tc-title").textContent = t.title;
+      btn.querySelector(".tc-desc").textContent = t.desc;
+      btn.addEventListener("click", () => {
+        const tpl = window.ROADBOOK_TEMPLATES && window.ROADBOOK_TEMPLATES[t.key];
+        if (!tpl) {
+          window.Roadbook.app.toast(`Template "${t.key}" not bundled`, true);
+          return;
+        }
+        window.Roadbook.state.replaceAll(tpl);
+        close();
+        window.Roadbook.app.fullRender();
+        window.Roadbook.app.toast(`Loaded "${t.title}"`);
+      });
+      grid.appendChild(btn);
+    });
+    overlay.classList.add("show");
+    setTimeout(() => {
+      const first = grid.querySelector(".template-card");
+      if (first) first.focus();
+    }, 40);
+  }
+
+  function close() {
+    document.getElementById("templateOverlay").classList.remove("show");
+  }
+
+  window.Roadbook = window.Roadbook || {};
+  window.Roadbook.templates = { open, close, META: TEMPLATES_META };
+})();
+
+
+// defaults.js — generic blank-state lanes used on fresh load
+(function () {
+  const BLANK_2026 = {
+    lanes: [
+      { id: "now",   name: "Now",   description: "Shipping this quarter.",  color: "sage" },
+      { id: "next",  name: "Next",  description: "Up next, scoped.",         color: "sky" },
+      { id: "later", name: "Later", description: "On the radar, not scoped.", color: "blush" }
+    ],
+    items: []
+  };
+
+  window.Roadbook = window.Roadbook || {};
+  window.Roadbook.defaults = {
+    BLANK_2026,
+    BLANK_2027: { lanes: [], items: [] }
+  };
+})();
+
+
+// app.js — main entry: render lanes/cards, wire top controls, keyboard nav
+(function () {
+  const ROW_H = 34;
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso + "T00:00:00");
+    if (isNaN(d)) return "";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  // ---------- Render ----------
+  function fullRender() {
+    const s = window.Roadbook.state.get();
+    document.getElementById("title").textContent = s.title;
+    document.getElementById("eyebrow").textContent = s.eyebrow;
+    document.getElementById("axisYear").textContent = s.activeYear;
+    document.querySelectorAll(".year-pill").forEach((p) => {
+      const active = p.dataset.year === s.activeYear;
+      p.classList.toggle("active", active);
+      p.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    document.documentElement.style.setProperty("--accent", s.accent);
+    document.body.setAttribute("data-theme", s.theme);
+    refreshUndoRedo();
+
+    const container = document.getElementById("lanes");
+    container.innerHTML = "";
+    const y = window.Roadbook.state.currentYear();
+    y.lanes.forEach((lane) => container.appendChild(renderLane(lane)));
+    y.items.forEach((item) => placeItem(item));
+    y.lanes.forEach((lane) => resizeLaneBody(lane.id));
+  }
+
+  function renderLane(lane) {
+    const el = document.createElement("div");
+    el.className = "lane";
+    el.setAttribute("role", "listitem");
+    el.dataset.laneId = lane.id;
+    el.dataset.color = lane.color || "cream";
+    el.innerHTML = `
+      <div class="lane-head">
+        <h2 contenteditable="true" spellcheck="false" data-role="name"></h2>
+        <p contenteditable="true" spellcheck="false" data-role="desc" data-placeholder="Add a description"></p>
+        <div class="lane-actions">
+          <button class="icon-action" data-action="add-item" aria-label="Add item" title="Add item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+          </button>
+          <button class="icon-action" data-action="color-lane" aria-label="Change lane color" title="Change color">
+            <svg viewBox="0 0 16 16" fill="none"><circle cx="5" cy="5" r="2" fill="#F59E0B"/><circle cx="11" cy="5" r="2" fill="#10B981"/><circle cx="5" cy="11" r="2" fill="#3B82F6"/><circle cx="11" cy="11" r="2" fill="#EF4444"/></svg>
+          </button>
+          <button class="icon-action danger" data-action="delete-lane" aria-label="Remove lane" title="Remove lane">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6 5V3h4v2M5 5l0.7 9h4.6l0.7-9"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="lane-body" data-lane="${lane.id}">
+        <div class="ghost"></div>
+      </div>
+    `;
+    el.querySelector('[data-role="name"]').textContent = lane.name;
+    el.querySelector('[data-role="desc"]').textContent = lane.description || "";
+
+    // Inline edits on lane name / description
+    const nameEl = el.querySelector('[data-role="name"]');
+    const descEl = el.querySelector('[data-role="desc"]');
+    bindEditable(nameEl, (v) => {
+      const l = window.Roadbook.state.findLane(lane.id);
+      if (l && v && v !== l.name) window.Roadbook.state.commit(() => { l.name = v; });
+    });
+    bindEditable(descEl, (v) => {
+      const l = window.Roadbook.state.findLane(lane.id);
+      if (l && v !== l.description) window.Roadbook.state.commit(() => { l.description = v; });
+    });
+
+    el.querySelector('[data-action="add-item"]').addEventListener("click", () => addItem(lane.id));
+    el.querySelector('[data-action="delete-lane"]').addEventListener("click", () => deleteLane(lane.id));
+    const colorBtn = el.querySelector('[data-action="color-lane"]');
+    colorBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openColorPicker(lane.id, colorBtn);
+    });
+    return el;
+  }
+
+  function bindEditable(el, onCommit) {
+    el.addEventListener("blur", () => onCommit(el.textContent.trim()));
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); el.blur(); }
+    });
+  }
+
+  function placeItem(item) {
+    const body = document.querySelector(`.lane-body[data-lane="${item.laneId}"]`);
+    if (!body) return null;
+    const card = document.createElement("div");
+    card.className = "card";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.dataset.id = item.id;
+    card.dataset.status = item.status || "planned";
+    card.dataset.type = item.type || "other";
+    card.dataset.complete = String(item.complete || 0);
+    card.style.setProperty("--start", item.start);
+    card.style.setProperty("--span", item.span);
+    card.style.setProperty("--row", item.row);
+    card.style.setProperty("--complete", item.complete || 0);
+    card.setAttribute("aria-label", `${item.title}, ${item.status}, Q${item.start}, span ${item.span}`);
+    card.innerHTML = `
+      <div class="fill"></div>
+      <span class="dot" aria-hidden="true"></span>
+      <span class="title"></span>
+      <span class="meta"></span>
+      <div class="resize" aria-hidden="true"></div>
+    `;
+    card.querySelector(".title").textContent = item.title;
+    card.querySelector(".meta").innerHTML = renderMeta(item);
+    window.Roadbook.drag.attachCard(card);
+    body.appendChild(card);
+    return card;
+  }
+
+  function renderMeta(item) {
+    const parts = [];
+    if (item.complete && item.complete > 0) parts.push(`<span class="pct">${item.complete}%</span>`);
+    if (item.due) parts.push(escapeHtml(fmtDate(item.due)));
+    return parts.join(" · ");
+  }
+
+  function updateCardDom(item) {
+    const card = document.querySelector(`.card[data-id="${item.id}"]`);
+    if (!card) return;
+    card.dataset.status = item.status;
+    card.dataset.type = item.type;
+    card.dataset.complete = String(item.complete || 0);
+    card.style.setProperty("--start", item.start);
+    card.style.setProperty("--span", item.span);
+    card.style.setProperty("--row", item.row);
+    card.style.setProperty("--complete", item.complete || 0);
+    card.setAttribute("aria-label", `${item.title}, ${item.status}, Q${item.start}, span ${item.span}`);
+    card.querySelector(".title").textContent = item.title;
+    card.querySelector(".meta").innerHTML = renderMeta(item);
+  }
+
+  function replaceCard(item, oldLaneId) {
+    const existing = document.querySelector(`.card[data-id="${item.id}"]`);
+    if (existing) existing.remove();
+    return placeItem(item);
+  }
+
+  function resizeLaneBody(laneId) {
+    const body = document.querySelector(`.lane-body[data-lane="${laneId}"]`);
+    if (!body) return;
+    const items = window.Roadbook.state.currentYear().items.filter((i) => i.laneId === laneId);
+    let maxRow = 0;
+    items.forEach((i) => maxRow = Math.max(maxRow, i.row));
+    body.style.minHeight = ((maxRow + 1) * ROW_H) + "px";
+  }
+
+  // ---------- Mutations ----------
+  function addItem(laneId) {
+    const id = window.Roadbook.state.uid("it");
+    let r = 0;
+    window.Roadbook.state.commit(() => {
+      const rowsUsed = window.Roadbook.state.currentYear().items
+        .filter((i) => i.laneId === laneId && i.start === 1)
+        .map((i) => i.row);
+      while (rowsUsed.includes(r)) r++;
+      window.Roadbook.state.currentYear().items.push({
+        id, laneId,
+        title: "New item",
+        start: 1, span: 1, row: r,
+        status: "planned",
+        type: "other",
+        due: "",
+        complete: 0
+      });
+    });
+    const item = window.Roadbook.state.findItem(id);
+    placeItem(item);
+    resizeLaneBody(laneId);
+    window.Roadbook.modal.open(id);
+  }
+
+  function addLane() {
+    const id = window.Roadbook.state.uid("lane");
+    const usedColors = window.Roadbook.state.currentYear().lanes.map((l) => l.color);
+    const palette = window.Roadbook.state.PALETTE;
+    const color = palette.find((c) => !usedColors.includes(c)) || palette[usedColors.length % palette.length];
+    window.Roadbook.state.commit(() => {
+      window.Roadbook.state.currentYear().lanes.push({
+        id, name: "New lane", description: "", color
+      });
+    });
+    fullRender();
+    // Focus the new lane name for inline edit
+    setTimeout(() => {
+      const newLane = document.querySelector(`.lane[data-lane-id="${id}"] [data-role="name"]`);
+      if (newLane) {
+        newLane.focus();
+        document.execCommand && document.execCommand("selectAll", false, null);
+      }
+    }, 40);
+  }
+
+  function deleteLane(laneId) {
+    const lane = window.Roadbook.state.findLane(laneId);
+    if (!lane) return;
+    const itemCount = window.Roadbook.state.currentYear().items.filter((i) => i.laneId === laneId).length;
+    if (!confirm(`Delete lane "${lane.name}"${itemCount ? ` and its ${itemCount} item(s)` : ""}?`)) return;
+    window.Roadbook.state.commit(() => {
+      const y = window.Roadbook.state.currentYear();
+      y.lanes = y.lanes.filter((l) => l.id !== laneId);
+      y.items = y.items.filter((i) => i.laneId !== laneId);
+    });
+    fullRender();
+    toast(`Deleted "${lane.name}"`);
+  }
+
+  // ---------- Color picker ----------
+  function openColorPicker(laneId, anchor) {
+    document.querySelectorAll(".color-popup").forEach((p) => p.remove());
+    const lane = window.Roadbook.state.findLane(laneId);
+    if (!lane) return;
+
+    const popup = document.createElement("div");
+    popup.className = "color-popup";
+    popup.setAttribute("role", "dialog");
+    popup.setAttribute("aria-label", "Pick lane color");
+
+    window.Roadbook.state.PALETTE.forEach((id) => {
+      const sw = document.createElement("button");
+      sw.className = "color-swatch" + (id === lane.color ? " active" : "");
+      sw.setAttribute("aria-label", id);
+      sw.title = id;
+      const swatchBg = getComputedStyle(document.documentElement).getPropertyValue(`--lane-${id}`).trim();
+      sw.style.background = swatchBg || "#FEFBEF";
+      sw.addEventListener("click", (e) => {
+        e.stopPropagation();
+        window.Roadbook.state.commit(() => { lane.color = id; });
+        const laneEl = document.querySelector(`.lane[data-lane-id="${laneId}"]`);
+        if (laneEl) laneEl.dataset.color = id;
+        popup.remove();
+        toast(`${lane.name} · ${id}`);
+      });
+      popup.appendChild(sw);
+    });
+
+    document.body.appendChild(popup);
+    const rect = anchor.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    let top = rect.bottom + window.scrollY + 6;
+    let left = rect.left + window.scrollX - popupRect.width / 2 + rect.width / 2;
+    left = Math.max(8, Math.min(left, document.documentElement.clientWidth - popupRect.width - 8));
+    popup.style.top = top + "px";
+    popup.style.left = left + "px";
+
+    setTimeout(() => {
+      const onOutside = (e) => {
+        if (!popup.contains(e.target) && !anchor.contains(e.target)) {
+          popup.remove();
+          document.removeEventListener("click", onOutside);
+        }
+      };
+      document.addEventListener("click", onOutside);
+    }, 0);
+  }
+
+  // ---------- Keyboard nav ----------
+  function onCardKeydown(e) {
+    const card = e.target.closest && e.target.closest(".card");
+    if (!card) return;
+    const id = card.dataset.id;
+    const item = window.Roadbook.state.findItem(id);
+    if (!item) return;
+
+    if (window.Roadbook.modal.isOpen()) return;
+
+    if (e.key === "Enter") { e.preventDefault(); window.Roadbook.modal.open(id); return; }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      if (confirm(`Delete "${item.title}"?`)) {
+        const lane = item.laneId;
+        window.Roadbook.state.commit(() => {
+          const y = window.Roadbook.state.currentYear();
+          y.items = y.items.filter((i) => i.id !== id);
+        });
+        card.remove();
+        resizeLaneBody(lane);
+        toast("Deleted");
+      }
+      return;
+    }
+
+    const arrows = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+    if (!arrows.includes(e.key)) return;
+    e.preventDefault();
+
+    if (e.shiftKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      const delta = e.key === "ArrowRight" ? 1 : -1;
+      const newSpan = Math.max(1, Math.min(5 - item.start, item.span + delta));
+      if (newSpan !== item.span) {
+        window.Roadbook.state.commit(() => { item.span = newSpan; });
+        updateCardDom(item);
+      }
+      return;
+    }
+
+    let { start, row, laneId } = item;
+    if (e.key === "ArrowLeft") start = Math.max(1, start - 1);
+    if (e.key === "ArrowRight") start = Math.min(5 - item.span, start + 1);
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      const y = window.Roadbook.state.currentYear();
+      const idx = y.lanes.findIndex((l) => l.id === laneId);
+      if (e.key === "ArrowUp" && row > 0) {
+        row -= 1;
+      } else if (e.key === "ArrowUp" && idx > 0) {
+        laneId = y.lanes[idx - 1].id;
+      } else if (e.key === "ArrowDown") {
+        // Within current lane: bump row; if at the (visual) bottom, move to next lane.
+        if (idx < y.lanes.length - 1) {
+          // Heuristic: holding ArrowDown moves between lanes when row 0 in next lane is free
+          row += 1;
+        }
+      }
+    }
+
+    const oldLane = item.laneId;
+    if (start !== item.start || row !== item.row || laneId !== item.laneId) {
+      window.Roadbook.state.commit(() => {
+        item.start = start;
+        item.row = row;
+        item.laneId = laneId;
+      });
+      if (oldLane !== laneId) {
+        replaceCard(item, oldLane);
+        resizeLaneBody(oldLane);
+      } else {
+        updateCardDom(item);
+      }
+      resizeLaneBody(laneId);
+      const newCard = document.querySelector(`.card[data-id="${id}"]`);
+      if (newCard) newCard.focus();
+    }
+  }
+
+  // ---------- Toast ----------
+  let toastTimer;
+  function toast(msg, error = false) {
+    const t = document.getElementById("toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.toggle("error", !!error);
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+    const s = document.getElementById("status");
+    if (s) s.textContent = msg;
+  }
+
+  function refreshUndoRedo() {
+    const u = document.getElementById("undoBtn");
+    const r = document.getElementById("redoBtn");
+    if (u) u.disabled = !window.Roadbook.state.canUndo();
+    if (r) r.disabled = !window.Roadbook.state.canRedo();
+  }
+
+  // ---------- Wire top controls ----------
+  function wireTop() {
+    document.querySelectorAll(".year-pill").forEach((p) => {
+      p.addEventListener("click", () => {
+        window.Roadbook.state.setActiveYear(p.dataset.year);
+        fullRender();
+      });
+    });
+
+    bindEditable(document.getElementById("title"), (v) => window.Roadbook.state.setTitle(v));
+    bindEditable(document.getElementById("eyebrow"), (v) => window.Roadbook.state.setEyebrow(v));
+
+    document.getElementById("addLane").addEventListener("click", addLane);
+
+    document.getElementById("reset").addEventListener("click", () => {
+      window.Roadbook.templates.open();
+    });
+
+    document.getElementById("undoBtn").addEventListener("click", () => {
+      if (window.Roadbook.state.undo()) { fullRender(); toast("Undo"); }
+    });
+    document.getElementById("redoBtn").addEventListener("click", () => {
+      if (window.Roadbook.state.redo()) { fullRender(); toast("Redo"); }
+    });
+
+    document.getElementById("themeBtn").addEventListener("click", () => {
+      const cur = window.Roadbook.state.get().theme;
+      const next = cur === "dark" ? "light" : "dark";
+      window.Roadbook.state.setTheme(next);
+      document.body.setAttribute("data-theme", next);
+      toast(`${next === "dark" ? "Dark" : "Light"} mode`);
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => window.Roadbook.share.exportJson());
+    document.getElementById("importBtn").addEventListener("click", () => window.Roadbook.share.triggerImport());
+    document.getElementById("importFile").addEventListener("change", (e) => window.Roadbook.share.handleImport(e));
+    document.getElementById("shareLink").addEventListener("click", () => window.Roadbook.share.copyShareLink());
+    document.getElementById("sharePng").addEventListener("click", () => window.Roadbook.share.copyPng());
+    document.getElementById("shareSvg").addEventListener("click", () => window.Roadbook.share.downloadSvg());
+
+    const accentInput = document.getElementById("accentInput");
+    document.getElementById("accentBtn").addEventListener("click", () => accentInput.click());
+    accentInput.value = window.Roadbook.state.get().accent;
+    accentInput.addEventListener("input", (e) => {
+      const v = e.target.value;
+      window.Roadbook.state.setAccent(v);
+      document.documentElement.style.setProperty("--accent", v);
+    });
+
+    document.getElementById("tCancel").addEventListener("click", () => window.Roadbook.templates.close());
+    document.getElementById("templateOverlay").addEventListener("click", (e) => {
+      if (e.target.id === "templateOverlay") window.Roadbook.templates.close();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        if (window.Roadbook.modal.isOpen()) window.Roadbook.modal.close();
+        const tpl = document.getElementById("templateOverlay");
+        if (tpl.classList.contains("show")) window.Roadbook.templates.close();
+      }
+      const cmd = e.metaKey || e.ctrlKey;
+      if (cmd && e.key.toLowerCase() === "z") {
+        if (window.Roadbook.modal.isOpen()) return;
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (window.Roadbook.state.redo()) { fullRender(); toast("Redo"); }
+        } else {
+          if (window.Roadbook.state.undo()) { fullRender(); toast("Undo"); }
+        }
+      }
+    });
+
+    document.addEventListener("keydown", onCardKeydown);
+  }
+
+  // ---------- Init ----------
+  function init() {
+    window.Roadbook.state.load();
+
+    // If hash carries data, replace state from hash before first render
+    if (window.Roadbook.share.maybeLoadFromHash()) {
+      // already loaded
+    }
+
+    // First-run if everything is blank
+    const s = window.Roadbook.state.get();
+    const noLanes2026 = !s.data["2026"].lanes.length;
+    const noLanes2027 = !s.data["2027"].lanes.length;
+    if (noLanes2026 && noLanes2027) {
+      // Seed with the BLANK defaults from defaults.js so the user sees a layout
+      window.Roadbook.state.replaceAll({
+        title: "Roadbook",
+        eyebrow: "Product · 2026",
+        activeYear: "2026",
+        data: {
+          "2026": window.Roadbook.defaults.BLANK_2026,
+          "2027": window.Roadbook.defaults.BLANK_2027
+        }
+      });
+      setTimeout(() => window.Roadbook.templates.open(), 200);
+    }
+
+    document.documentElement.style.setProperty("--accent", s.accent);
+    document.body.setAttribute("data-theme", s.theme);
+
+    wireTop();
+    window.Roadbook.modal.wire();
+    fullRender();
+  }
+
+  window.Roadbook = window.Roadbook || {};
+  window.Roadbook.app = {
+    fullRender,
+    placeItem,
+    updateCardDom,
+    replaceCard,
+    resizeLaneBody,
+    toast
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+
+</script>
+</body>
+</html>

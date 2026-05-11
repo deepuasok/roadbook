@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build index.html
+        run: node tools/build.mjs
+
+      - name: Validate templates are well-formed JSON
+        run: |
+          for f in templates/*.json; do
+            echo "Checking $f"
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))"
+          done
+
+      - name: Smoke test — index.html exists and is non-trivial
+        run: |
+          test -f index.html
+          size=$(wc -c < index.html)
+          if [ "$size" -lt 20000 ]; then
+            echo "index.html is suspiciously small ($size bytes)"
+            exit 1
+          fi
+          echo "index.html: $size bytes"

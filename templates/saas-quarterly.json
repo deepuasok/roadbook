@@ -1,0 +1,30 @@
+{
+  "roadbookVersion": 1,
+  "title": "SaaS Roadmap 2026",
+  "eyebrow": "Product · Quarterly",
+  "activeYear": "2026",
+  "data": {
+    "2026": {
+      "lanes": [
+        { "id": "growth",   "name": "Growth",   "description": "Acquisition, activation, retention.",   "color": "mint" },
+        { "id": "product",  "name": "Product",  "description": "Features customers will pay more for.", "color": "lavender" },
+        { "id": "platform", "name": "Platform", "description": "Reliability, scale, developer velocity.", "color": "stone" }
+      ],
+      "items": [
+        { "id": "g1", "laneId": "growth",   "title": "Self-serve signup",      "start": 1, "span": 1, "row": 0, "status": "funded",  "type": "build", "due": "", "complete": 60 },
+        { "id": "g2", "laneId": "growth",   "title": "Referral program",      "start": 2, "span": 1, "row": 0, "status": "planned", "type": "polish","due": "", "complete": 0 },
+        { "id": "g3", "laneId": "growth",   "title": "Lifecycle emails",      "start": 2, "span": 2, "row": 1, "status": "planned", "type": "data",  "due": "", "complete": 0 },
+        { "id": "g4", "laneId": "growth",   "title": "Pricing experiments",   "start": 3, "span": 2, "row": 0, "status": "soon",    "type": "data",  "due": "", "complete": 0 },
+        { "id": "p1", "laneId": "product",  "title": "Workspaces & teams",    "start": 1, "span": 2, "row": 0, "status": "funded",  "type": "build", "due": "", "complete": 25 },
+        { "id": "p2", "laneId": "product",  "title": "Bulk import / export",  "start": 2, "span": 1, "row": 1, "status": "planned", "type": "build", "due": "", "complete": 0 },
+        { "id": "p3", "laneId": "product",  "title": "API v2",                "start": 3, "span": 2, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
+        { "id": "p4", "laneId": "product",  "title": "Mobile app",            "start": 4, "span": 1, "row": 1, "status": "pending", "type": "build", "due": "", "complete": 0 },
+        { "id": "x1", "laneId": "platform", "title": "Migrate to Postgres 16","start": 1, "span": 1, "row": 0, "status": "planned", "type": "data",  "due": "", "complete": 0 },
+        { "id": "x2", "laneId": "platform", "title": "SSO / SAML",            "start": 2, "span": 1, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
+        { "id": "x3", "laneId": "platform", "title": "Multi-region rollout",  "start": 3, "span": 2, "row": 0, "status": "planned", "type": "build", "due": "", "complete": 0 },
+        { "id": "x4", "laneId": "platform", "title": "SOC2 audit",            "start": 4, "span": 1, "row": 1, "status": "conditional", "type": "polish", "due": "", "complete": 0 }
+      ]
+    },
+    "2027": { "lanes": [], "items": [] }
+  }
+}

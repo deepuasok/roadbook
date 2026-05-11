@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0F19" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Roadbook — a fork-friendly, offline-first roadmap builder for product managers. Drag chips, share PNG/SVG/link, version in git.">
+<title>Roadbook</title>
+<style>
+/* INJECT:CSS */
+</style>
+</head>
+<body data-theme="light">
+<div class="page" id="page">
+
+  <div class="head">
+    <div class="head-left">
+      <div class="eyebrow" id="eyebrow" contenteditable="true" spellcheck="false" data-placeholder="Product · 2026">Product · 2026</div>
+      <h1 id="title" contenteditable="true" spellcheck="false" data-placeholder="Roadmap title">Roadbook</h1>
+    </div>
+    <div class="head-right">
+      <div class="year-pills" id="yearPills" role="tablist" aria-label="Year">
+        <button class="year-pill active" data-year="2026" role="tab" aria-selected="true">2026</button>
+        <button class="year-pill" data-year="2027" role="tab" aria-selected="false">2027</button>
+      </div>
+      <div class="head-tools">
+        <button class="icon-btn" id="undoBtn" title="Undo (⌘Z)" aria-label="Undo">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h6.5a3 3 0 010 6H6"/><path d="M7 5L4 8l3 3"/></svg>
+        </button>
+        <button class="icon-btn" id="redoBtn" title="Redo (⌘⇧Z)" aria-label="Redo">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8H5.5a3 3 0 000 6H10"/><path d="M9 5l3 3-3 3"/></svg>
+        </button>
+        <button class="icon-btn" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 9.5A5 5 0 016.5 3a5.5 5.5 0 1 0 6.5 6.5z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="legend">
+      <div class="legend-row">
+        <span class="label">Status</span>
+        <span><span class="dot dot-planned"></span>Planned</span>
+        <span><span class="dot dot-funded"></span>Funded</span>
+        <span><span class="dot dot-soon"></span>Coming Soon</span>
+        <span><span class="dot dot-pending"></span>Pending</span>
+        <span><span class="dot dot-conditional"></span>If Capacity</span>
+      </div>
+      <div class="legend-row">
+        <span class="label">Type</span>
+        <span><span class="stripe stripe-build"></span>Build</span>
+        <span><span class="stripe stripe-data"></span>Data</span>
+        <span><span class="stripe stripe-polish"></span>Polish</span>
+      </div>
+    </div>
+    <div class="toolbar-actions">
+      <button class="icon-btn" id="importBtn" title="Import roadmap from JSON" aria-label="Import JSON">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V2"/><path d="M5 8l3 3 3-3"/><path d="M3 13h10"/></svg>
+        Import
+      </button>
+      <button class="icon-btn" id="exportBtn" title="Export roadmap as JSON" aria-label="Export JSON">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9"/><path d="M5 8l3 3 3-3"/><path d="M3 13h10"/></svg>
+        Export
+      </button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <span class="divider" aria-hidden="true"></span>
+      <button class="icon-btn" id="shareLink" title="Copy shareable link" aria-label="Copy share link">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9a3 3 0 014.2 0l1.4-1.4a3 3 0 00-4.2-4.2L7 4.8"/><path d="M9 7a3 3 0 01-4.2 0L3.4 8.4a3 3 0 004.2 4.2L9 11.2"/></svg>
+        Link
+      </button>
+      <button class="icon-btn" id="sharePng" title="Copy roadmap PNG" aria-label="Copy PNG">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.2"/><path d="M3 12l3.5-3.5L9 11l2-2 3 3"/></svg>
+        PNG
+      </button>
+      <button class="icon-btn" id="shareSvg" title="Download SVG" aria-label="Download SVG">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h10"/><path d="M5 9l3 3 3-3"/><path d="M8 3v9"/></svg>
+        SVG
+      </button>
+    </div>
+  </div>
+
+  <div class="axis">
+    <div class="year" id="axisYear">2026</div>
+    <div class="q">Q1</div>
+    <div class="q">Q2</div>
+    <div class="q">Q3</div>
+    <div class="q">Q4</div>
+  </div>
+
+  <div id="lanes" role="list" aria-label="Swim lanes"></div>
+
+  <button class="add-lane-btn" id="addLane">+ Add swim lane</button>
+
+  <div class="controls">
+    <button class="btn" id="reset">Templates / Reset</button>
+    <button class="btn" id="accentBtn" title="Set accent color">Accent color</button>
+    <input type="color" id="accentInput" value="#6366F1" hidden>
+    <span class="muted" id="status">Changes auto-save in this browser.</span>
+  </div>
+
+  <footer class="footer">
+    <span>Roadbook</span>
+    <span class="dot-sep">·</span>
+    <a href="https://github.com/deepuasok/roadbook" target="_blank" rel="noopener">github</a>
+    <span class="dot-sep">·</span>
+    <span class="muted">v0.1</span>
+  </footer>
+
+</div>
+
+<div class="modal-overlay" id="modalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal">
+    <h3 id="modalTitle">Edit item</h3>
+    <div class="field">
+      <label for="fTitle">Title</label>
+      <input type="text" id="fTitle" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="fDue">Due date</label>
+        <input type="date" id="fDue" />
+      </div>
+      <div class="field">
+        <label for="fStatus">Status</label>
+        <select id="fStatus">
+          <option value="planned">Planned</option>
+          <option value="funded">Funded</option>
+          <option value="soon">Coming Soon</option>
+          <option value="pending">Pending</option>
+          <option value="conditional">If Capacity</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fType">Type</label>
+      <select id="fType">
+        <option value="other">Other (no color)</option>
+        <option value="build">Build</option>
+        <option value="data">Data</option>
+        <option value="polish">Polish</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="fComplete">Completion <span class="aux" id="fCompleteVal">0%</span></label>
+      <input type="range" id="fComplete" min="0" max="100" step="5" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger" id="mDelete">Remove</button>
+      <div class="spacer"></div>
+      <button class="btn" id="mCancel">Cancel</button>
+      <button class="btn primary" id="mSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="templateOverlay" role="dialog" aria-modal="true" aria-labelledby="templateTitle">
+  <div class="modal modal-wide">
+    <h3 id="templateTitle">Start with a template</h3>
+    <p class="modal-sub">Pick a starter, or start blank. Your current roadmap will be replaced.</p>
+    <div class="template-grid" id="templateGrid"></div>
+    <div class="modal-actions">
+      <div class="spacer"></div>
+      <button class="btn" id="tCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* INJECT:TEMPLATES */
+</script>
+<script>
+/* INJECT:JS */
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "name": "roadbook",
+  "version": "0.1.0",
+  "description": "A fork-friendly, offline-first roadmap builder for product managers.",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/build.mjs && npx --yes serve@14 -l 5173 .",
+    "watch": "node tools/build.mjs && (chokidar 'src/**/*' 'templates/**/*' -c 'node tools/build.mjs' || node -e 'console.log(\"Install chokidar-cli for watch mode\")')"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "roadmap",
+    "product-management",
+    "swimlane",
+    "kanban",
+    "planning",
+    "html",
+    "single-file",
+    "offline"
+  ]
+}
