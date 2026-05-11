@@ -1504,19 +1504,24 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       card
     };
 
-    e.currentTarget.addEventListener("pointermove", onResizeMove);
-    e.currentTarget.addEventListener("pointerup", onResizeEnd);
-    e.currentTarget.addEventListener("pointercancel", onResizeEnd);
+    // setPointerCapture redirects subsequent pointer events to `card`, so the
+    // move/up listeners must be on `card` — not on the resize handle (a child).
+    card.addEventListener("pointermove", onResizeMove);
+    card.addEventListener("pointerup", onResizeEnd);
+    card.addEventListener("pointercancel", onResizeEnd);
   }
 
   function onResizeMove(e) {
     if (!dragState || dragState.mode !== "resize") return;
     const dates = window.Roadbook.dates;
     const totalDays = yearDays();
+    const SNAP = dates.SNAP_DAYS;
     const dx = e.clientX - dragState.startX;
     const daysDelta = dayDistanceFromPixels(dx, dragState.bodyRect.width);
 
-    const minEnd = dragState.initialStartDay; // span >= 1 day during preview
+    // Don't let preview shrink below the snap minimum (14 days) — the card
+    // would otherwise collapse to 0px width when the cursor passes the start.
+    const minEnd = dragState.initialStartDay + SNAP - 1;
     const targetEnd = Math.max(minEnd, Math.min(totalDays, dragState.initialEndDay + daysDelta));
     const newSpan = targetEnd - dragState.initialStartDay + 1;
 
@@ -1525,7 +1530,6 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     dragState.currentEndDay = targetEnd;
 
     // Ghost previews the snapped 14-day end
-    const SNAP = dates.SNAP_DAYS;
     const snappedSpan = Math.max(SNAP, Math.round(newSpan / SNAP) * SNAP);
     const snappedEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
     showGhostByDays(dragState.body, dragState.initialStartDay, snappedEnd, parseInt(dragState.card.style.getPropertyValue("--row"), 10) || 0);
@@ -1535,12 +1539,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     if (!dragState) return;
     const dates = window.Roadbook.dates;
     const item = window.Roadbook.state.findItem(dragState.id);
-    try { e.currentTarget.releasePointerCapture(dragState.pointerId); } catch (_) {}
-    e.currentTarget.removeEventListener("pointermove", onResizeMove);
-    e.currentTarget.removeEventListener("pointerup", onResizeEnd);
-    e.currentTarget.removeEventListener("pointercancel", onResizeEnd);
+    const card = dragState.card;
+    try { card.releasePointerCapture(dragState.pointerId); } catch (_) {}
+    card.removeEventListener("pointermove", onResizeMove);
+    card.removeEventListener("pointerup", onResizeEnd);
+    card.removeEventListener("pointercancel", onResizeEnd);
     hideGhosts();
-    dragState.card.classList.remove("resizing");
+    card.classList.remove("resizing");
 
     if (item) {
       const totalDays = yearDays();
