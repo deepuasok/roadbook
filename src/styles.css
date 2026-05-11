@@ -408,7 +408,20 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   touch-action: none;
 }
 .card:hover { background-color: var(--pill-bg-hover); border-color: var(--border-strong); }
-.card.dragging { opacity: 0.35; cursor: grabbing; }
+.card.dragging {
+  cursor: grabbing;
+  z-index: 50;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--accent);
+  border-color: var(--accent);
+  transition: box-shadow 120ms ease;
+  will-change: transform;
+}
+.card.resizing {
+  z-index: 40;
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(0,0,0,0.14);
+  border-color: var(--accent);
+  will-change: width;
+}
 .card.selected,
 .card:focus-visible {
   outline: none;

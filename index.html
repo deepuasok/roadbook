@@ -418,7 +418,20 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   touch-action: none;
 }
 .card:hover { background-color: var(--pill-bg-hover); border-color: var(--border-strong); }
-.card.dragging { opacity: 0.35; cursor: grabbing; }
+.card.dragging {
+  cursor: grabbing;
+  z-index: 50;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22), 0 0 0 1px var(--accent);
+  border-color: var(--accent);
+  transition: box-shadow 120ms ease;
+  will-change: transform;
+}
+.card.resizing {
+  z-index: 40;
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(0,0,0,0.14);
+  border-color: var(--accent);
+  will-change: width;
+}
 .card.selected,
 .card:focus-visible {
   outline: none;
@@ -1431,10 +1444,15 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
 
 // drag.js — pointer-event drag, drop, resize.
-// Drag/resize snap to 14-day boundaries from Jan 1 of the active year.
-// Move preserves duration; resize changes endDate only.
+//
+// UX: during drag/resize, the card follows the cursor smoothly via CSS transform
+// (move) or live --span-days (resize). A ghost outline previews the 14-day snap
+// target. On pointerup, state commits to the snap target and the card lands.
+// This keeps the visual feedback continuous while the data stays clean to a
+// 2-week grid measured from Jan 1 of the active year.
 (function () {
   const ROW_H = 34;
+  const DRAG_THRESHOLD = 4; // px before drag activates (so clicks still register)
 
   let dragState = null;
 
@@ -1450,29 +1468,41 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   function yearDays() {
     return window.Roadbook.dates.daysInYear(activeYearInt());
   }
+  function dayDistanceFromPixels(dx, bodyWidth) {
+    const totalDays = yearDays();
+    return Math.round((dx / bodyWidth) * totalDays);
+  }
 
-  // ---------- Resize ----------
+  // ----------------------------- RESIZE -----------------------------
   function onResizeStart(e) {
     e.preventDefault();
     e.stopPropagation();
     const card = e.currentTarget.closest(".card");
     if (!card) return;
     const body = card.closest(".lane-body");
-    const rect = body.getBoundingClientRect();
     const item = window.Roadbook.state.findItem(card.dataset.id);
     if (!item) return;
+    const dates = window.Roadbook.dates;
 
-    card.setPointerCapture(e.pointerId);
+    const bodyRect = body.getBoundingClientRect();
+    const startDay = dates.dayOfYear(item.startDate);
+    const endDay = dates.dayOfYear(item.endDate);
+
+    try { card.setPointerCapture(e.pointerId); } catch (_) {}
+    card.classList.add("resizing");
+
     dragState = {
       mode: "resize",
       id: card.dataset.id,
       pointerId: e.pointerId,
       startX: e.clientX,
-      bodyRect: rect,
-      initialEnd: item.endDate,
+      bodyRect,
+      body,
+      initialStartDay: startDay,
+      initialEndDay: endDay,
+      currentEndDay: endDay,
       card
     };
-    card.classList.add("selected");
 
     e.currentTarget.addEventListener("pointermove", onResizeMove);
     e.currentTarget.addEventListener("pointerup", onResizeEnd);
@@ -1481,69 +1511,82 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
   function onResizeMove(e) {
     if (!dragState || dragState.mode !== "resize") return;
-    const item = window.Roadbook.state.findItem(dragState.id);
-    if (!item) return;
-    const year = activeYearInt();
     const dates = window.Roadbook.dates;
     const totalDays = yearDays();
     const dx = e.clientX - dragState.startX;
-    const daysDelta = Math.round((dx / dragState.bodyRect.width) * totalDays);
-    let newEnd = dates.addDaysIso(dragState.initialEnd, daysDelta);
-    // Snap end to 14-day grid (aligned to start)
-    const startDay = dates.dayOfYear(item.startDate);
-    let endDay = dates.dayOfYear(newEnd);
-    const minEndDay = startDay + dates.SNAP_DAYS - 1;
-    if (endDay < minEndDay) endDay = minEndDay;
-    // Quantize span to multiples of SNAP_DAYS
-    const span = endDay - startDay + 1;
-    const snappedSpan = Math.max(dates.SNAP_DAYS, Math.round(span / dates.SNAP_DAYS) * dates.SNAP_DAYS);
-    endDay = Math.min(totalDays, startDay + snappedSpan - 1);
-    newEnd = dates.isoFromYMD(year, 1, 1);
-    newEnd = dates.addDaysIso(newEnd, endDay - 1);
+    const daysDelta = dayDistanceFromPixels(dx, dragState.bodyRect.width);
 
-    if (newEnd !== item.endDate) {
-      window.Roadbook.state.commitSilent(() => { item.endDate = newEnd; });
-      window.Roadbook.app.updateCardDom(item);
-    }
+    const minEnd = dragState.initialStartDay; // span >= 1 day during preview
+    const targetEnd = Math.max(minEnd, Math.min(totalDays, dragState.initialEndDay + daysDelta));
+    const newSpan = targetEnd - dragState.initialStartDay + 1;
+
+    // Live, unsnapped width — card follows cursor smoothly
+    dragState.card.style.setProperty("--span-days", newSpan);
+    dragState.currentEndDay = targetEnd;
+
+    // Ghost previews the snapped 14-day end
+    const SNAP = dates.SNAP_DAYS;
+    const snappedSpan = Math.max(SNAP, Math.round(newSpan / SNAP) * SNAP);
+    const snappedEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
+    showGhostByDays(dragState.body, dragState.initialStartDay, snappedEnd, parseInt(dragState.card.style.getPropertyValue("--row"), 10) || 0);
   }
 
   function onResizeEnd(e) {
     if (!dragState) return;
+    const dates = window.Roadbook.dates;
+    const item = window.Roadbook.state.findItem(dragState.id);
     try { e.currentTarget.releasePointerCapture(dragState.pointerId); } catch (_) {}
     e.currentTarget.removeEventListener("pointermove", onResizeMove);
     e.currentTarget.removeEventListener("pointerup", onResizeEnd);
     e.currentTarget.removeEventListener("pointercancel", onResizeEnd);
-    window.Roadbook.state.snapshot();
+    hideGhosts();
+    dragState.card.classList.remove("resizing");
+
+    if (item) {
+      const totalDays = yearDays();
+      const SNAP = dates.SNAP_DAYS;
+      const year = activeYearInt();
+      const currentSpan = dragState.currentEndDay - dragState.initialStartDay + 1;
+      const snappedSpan = Math.max(SNAP, Math.round(currentSpan / SNAP) * SNAP);
+      const finalEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
+      const newEndDate = dates.addDaysIso(dates.isoFromYMD(year, 1, 1), finalEnd - 1);
+      if (newEndDate !== item.endDate) {
+        window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+      }
+      window.Roadbook.app.updateCardDom(item);
+    }
     dragState = null;
   }
 
-  // ---------- Move ----------
+  // ----------------------------- MOVE -----------------------------
   function onPointerDown(e) {
     if (e.target.classList && e.target.classList.contains("resize")) return;
     if (e.button !== 0 && e.button !== undefined && e.pointerType === "mouse") return;
     const card = e.currentTarget;
-    const id = card.dataset.id;
-    const item = window.Roadbook.state.findItem(id);
+    const item = window.Roadbook.state.findItem(card.dataset.id);
     if (!item) return;
 
     const body = card.closest(".lane-body");
-    const startRect = body.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
 
     dragState = {
       mode: "move",
-      id,
+      id: card.dataset.id,
       pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      bodyRect: startRect,
-      originStart: item.startDate,
-      originEnd: item.endDate,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      cardScreenLeft: cardRect.left,
+      cardScreenTop: cardRect.top,
+      cardWidth: cardRect.width,
       originLane: item.laneId,
+      originStartDate: item.startDate,
+      originEndDate: item.endDate,
       originRow: item.row,
       card
     };
 
-    card.setPointerCapture(e.pointerId);
+    try { card.setPointerCapture(e.pointerId); } catch (_) {}
     card.addEventListener("pointermove", onPointerMove);
     card.addEventListener("pointerup", onPointerUp);
     card.addEventListener("pointercancel", onPointerUp);
@@ -1551,43 +1594,46 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
   function onPointerMove(e) {
     if (!dragState || dragState.mode !== "move") return;
-    const dx = e.clientX - dragState.startX;
-    const dy = e.clientY - dragState.startY;
-    if (!dragState.dragging && Math.hypot(dx, dy) < 4) return;
+    const dx = e.clientX - dragState.startClientX;
+    const dy = e.clientY - dragState.startClientY;
 
+    if (!dragState.dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     if (!dragState.dragging) {
       dragState.dragging = true;
       dragState.card.classList.add("dragging");
     }
 
-    const laneEl = elementLaneBodyAt(e.clientX, e.clientY);
-    if (!laneEl) return;
-    const rect = laneEl.getBoundingClientRect();
+    // 1. Smooth visual follow via transform
+    dragState.card.style.transform = `translate(${dx}px, ${dy}px)`;
+
+    // 2. Detect the lane body under the cursor and snap target
+    const targetBody = elementLaneBodyAt(e.clientX, e.clientY);
+    if (!targetBody) return;
+
+    const targetRect = targetBody.getBoundingClientRect();
     const dates = window.Roadbook.dates;
     const year = activeYearInt();
     const totalDays = yearDays();
-    const item = window.Roadbook.state.findItem(dragState.id);
-    if (!item) return;
-    const span = dates.diffDays(dragState.originStart, dragState.originEnd); // inclusive count = span+1 days
+    const SNAP = dates.SNAP_DAYS;
+    const spanDays = dates.diffDays(dragState.originStartDate, dragState.originEndDate) + 1;
 
-    // Determine new startDate from x position
-    const xInLane = e.clientX - rect.left;
-    let dayIndex = Math.floor((xInLane / rect.width) * totalDays);
-    if (dayIndex < 0) dayIndex = 0;
-    // Snap to nearest 14-day boundary
-    const snapped = Math.round(dayIndex / dates.SNAP_DAYS) * dates.SNAP_DAYS;
-    let newStartDay = Math.min(totalDays - span - 1, Math.max(0, snapped));
-    let newStartDate = dates.isoFromYMD(year, 1, 1);
-    newStartDate = dates.addDaysIso(newStartDate, newStartDay);
-    const newEndDate = dates.addDaysIso(newStartDate, span);
+    // Card visual left edge in screen space (transform applied)
+    const cardLeftScreen = dragState.cardScreenLeft + dx;
+    const xInTarget = cardLeftScreen - targetRect.left;
+    let dayIndex = Math.floor((xInTarget / targetRect.width) * totalDays);
+    const snappedDay = Math.round(dayIndex / SNAP) * SNAP;
+    const newStartDay = Math.max(0, Math.min(totalDays - spanDays, snappedDay));
+    const yearStart = dates.isoFromYMD(year, 1, 1);
+    const newStartDate = dates.addDaysIso(yearStart, newStartDay);
+    const newEndDate = dates.addDaysIso(newStartDate, spanDays - 1);
 
-    // Row
-    const y = e.clientY - rect.top;
-    const row = Math.max(0, Math.floor(y / ROW_H));
+    // Row from cursor Y in target body
+    const yInTarget = e.clientY - targetRect.top;
+    const row = Math.max(0, Math.floor(yInTarget / ROW_H));
 
-    showGhost(laneEl, newStartDate, newEndDate, row);
+    showGhostByDays(targetBody, newStartDay + 1, newStartDay + spanDays, row);
     dragState.dropTarget = {
-      laneId: laneEl.dataset.lane,
+      laneId: targetBody.dataset.lane,
       startDate: newStartDate,
       endDate: newEndDate,
       row
@@ -1597,13 +1643,16 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   function onPointerUp(e) {
     if (!dragState) return;
     const card = dragState.card;
+    const dragging = dragState.dragging;
+    const drop = dragState.dropTarget;
+
     try { card.releasePointerCapture(dragState.pointerId); } catch (_) {}
     card.removeEventListener("pointermove", onPointerMove);
     card.removeEventListener("pointerup", onPointerUp);
     card.removeEventListener("pointercancel", onPointerUp);
 
-    const dragging = dragState.dragging;
-    const drop = dragState.dropTarget;
+    // Clear visual transform so the card settles into its DOM position
+    card.style.transform = "";
     card.classList.remove("dragging");
     hideGhosts();
 
@@ -1640,20 +1689,19 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     dragState = null;
   }
 
+  // ----------------------------- Helpers -----------------------------
   function elementLaneBodyAt(x, y) {
     const stack = document.elementsFromPoint(x, y);
     return stack.find((el) => el.classList && el.classList.contains("lane-body")) || null;
   }
 
-  function showGhost(body, startDate, endDate, row) {
+  // showGhostByDays — startDay/endDay are 1-based day-of-year inclusive
+  function showGhostByDays(body, startDay, endDay, row) {
     document.querySelectorAll(".ghost").forEach((g) => g.classList.remove("show"));
     const g = body.querySelector(".ghost");
     if (!g) return;
-    const dates = window.Roadbook.dates;
     const totalDays = yearDays();
-    const startDay = dates.dayOfYear(startDate);
-    const endDay = dates.dayOfYear(endDate);
-    const spanDays = endDay - startDay + 1;
+    const spanDays = Math.max(1, endDay - startDay + 1);
     g.style.left = `calc((${startDay} - 1) * (100% / ${totalDays}))`;
     g.style.width = `calc(${spanDays} * (100% / ${totalDays}) - 6px)`;
     g.style.top = `${row * ROW_H}px`;
