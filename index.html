@@ -343,27 +343,30 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 [data-theme="dark"] .lane-head p[contenteditable="true"]:focus-visible { background: rgba(255,255,255,0.06); }
 
 .lane-head .lane-actions {
-  display: flex; gap: 4px; margin-top: 2px;
+  display: flex; gap: 6px; margin-top: 8px;
   opacity: 0;
-  transition: opacity 120ms ease;
+  pointer-events: none;
+  transition: opacity 140ms ease;
 }
-.lane:hover .lane-head .lane-actions,
-.lane:focus-within .lane-head .lane-actions { opacity: 1; }
+/* Hover-only — uniform across every lane. Don't use :focus-within: it kept
+   the icons stuck visible after editing the lane name/desc. */
+.lane:hover .lane-head .lane-actions { opacity: 1; pointer-events: auto; }
 .lane-head .icon-action {
-  appearance: none; border: none; background: transparent;
+  appearance: none; border: none; background-color: transparent;
   color: var(--text-muted);
-  width: 22px; height: 22px;
+  width: 28px; height: 28px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: 7px;
   cursor: pointer; font-family: inherit;
   display: inline-flex; align-items: center; justify-content: center;
-  transition: color 120ms ease, background 120ms ease;
+  transition: color 140ms ease, background-color 140ms ease, transform 80ms cubic-bezier(0.2, 0.8, 0.3, 1.2);
 }
 .lane-head .icon-action:hover { color: var(--text); background-color: var(--bg-grid); }
+.lane-head .icon-action:active { transform: scale(0.94); }
 .lane-head .icon-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.lane-head .icon-action.danger:hover { color: #991B1B; background: #FEF2F2; }
-[data-theme="dark"] .lane-head .icon-action.danger:hover { color: #FCA5A5; background: rgba(239, 68, 68, 0.12); }
-.lane-head .icon-action svg { width: 13px; height: 13px; }
+.lane-head .icon-action.danger:hover { color: #991B1B; background-color: #FEF2F2; }
+[data-theme="dark"] .lane-head .icon-action.danger:hover { color: #FCA5A5; background-color: rgba(239, 68, 68, 0.12); }
+.lane-head .icon-action svg { width: 16px; height: 16px; }
 
 .lane-body {
   position: relative;
