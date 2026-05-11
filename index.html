@@ -39,7 +39,7 @@
   --pill-bg: #FFFFFF;
   --pill-bg-hover: #F9FAFB;
   --modal-bg: #FFFFFF;
-  --modal-overlay: rgba(17, 24, 39, 0.35);
+  --modal-overlay: rgba(17, 24, 39, 0.14);
   --toast-bg: #111827;
   --toast-fg: #FFFFFF;
 
@@ -95,7 +95,7 @@
   --pill-bg: #131A28;
   --pill-bg-hover: #1A2233;
   --modal-bg: #131A28;
-  --modal-overlay: rgba(0, 0, 0, 0.55);
+  --modal-overlay: rgba(0, 0, 0, 0.32);
   --toast-bg: #E5E7EB;
   --toast-fg: #111827;
 
@@ -546,9 +546,9 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   background-color: var(--modal-overlay);
   display: none; align-items: center; justify-content: center;
   z-index: 100;
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  animation: roadbook-overlay-fade 160ms ease;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: roadbook-overlay-fade 120ms ease;
 }
 @keyframes roadbook-overlay-fade {
   from { opacity: 0; }
@@ -558,32 +558,32 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .modal {
   background-color: var(--modal-bg);
   color: var(--text);
-  border-radius: 16px;
-  width: 480px; max-width: calc(100vw - 32px);
+  border-radius: 14px;
+  width: 400px; max-width: calc(100vw - 32px);
   box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.22),
-    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 12px 32px rgba(0, 0, 0, 0.14),
+    0 1px 4px rgba(0, 0, 0, 0.05),
     inset 0 0.5px 0 rgba(255, 255, 255, 0.5);
   border: 1px solid var(--border);
-  animation: roadbook-modal-pop 200ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+  animation: roadbook-modal-pop 140ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
 }
 [data-theme="dark"] .modal {
   box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.4),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
+    0 12px 32px rgba(0, 0, 0, 0.42),
+    0 1px 4px rgba(0, 0, 0, 0.3),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
 }
 @keyframes roadbook-modal-pop {
-  from { transform: translateY(8px) scale(0.98); opacity: 0; }
+  from { transform: translateY(6px) scale(0.985); opacity: 0; }
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
-.modal-wide { width: 640px; }
+.modal-wide { width: 560px; }
 
 .modal-edit {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 24px 26px 20px;
+  gap: 13px;
+  padding: 18px 20px 16px;
 }
 .modal-edit > .field,
 .modal-edit > .field-row,
@@ -591,12 +591,12 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .modal-edit > .modal-actions { margin: 0; }
 .modal-edit .field-row .field { margin: 0; }
 .modal-edit .field { margin: 0; }
-.modal-edit > .modal-actions { margin-top: 4px; }
-.modal-edit > .duration-hint { margin-top: -12px; }
+.modal-edit > .modal-actions { margin-top: 2px; }
+.modal-edit > .duration-hint { margin-top: -8px; }
 .modal-edit h3 {
-  font-size: 18px; font-weight: 600; letter-spacing: -0.018em;
+  font-size: 15px; font-weight: 600; letter-spacing: -0.014em;
   margin: 0;
-  padding-bottom: 16px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -610,11 +610,11 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   background-color: var(--bg);
   color: var(--text-dim);
   border-radius: 999px;
-  padding: 7px 14px;
+  padding: 5px 11px;
   font-family: inherit;
-  font-size: 12.5px; font-weight: 500;
+  font-size: 11.5px; font-weight: 500;
   cursor: pointer;
-  display: inline-flex; align-items: center; gap: 7px;
+  display: inline-flex; align-items: center; gap: 6px;
   transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 80ms cubic-bezier(0.2, 0.8, 0.3, 1.2), box-shadow 140ms ease;
   letter-spacing: 0.01em;
 }
@@ -707,21 +707,21 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 }
 .field label {
   display: flex; justify-content: space-between; align-items: center;
-  font-size: 10.5px; font-weight: 600;
+  font-size: 10px; font-weight: 600;
   letter-spacing: 0.5px; color: var(--text-dim);
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .field label .aux {
   color: var(--text); font-weight: 500;
-  text-transform: none; letter-spacing: 0; font-size: 12px;
+  text-transform: none; letter-spacing: 0; font-size: 11.5px;
 }
 .field input, .field select, .field textarea {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 14px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
   font-family: inherit;
   color: var(--text);
   background-color: var(--bg);
@@ -818,10 +818,10 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 /* Refined buttons inside the edit modal */
 .modal-edit .modal-actions { gap: 10px; }
 .modal-edit .modal-actions .btn {
-  padding: 9px 16px;
-  font-size: 13px;
+  padding: 7px 14px;
+  font-size: 12.5px;
   font-weight: 500;
-  border-radius: 9px;
+  border-radius: 8px;
   letter-spacing: 0.01em;
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 80ms cubic-bezier(0.2, 0.8, 0.3, 1.2);
 }
