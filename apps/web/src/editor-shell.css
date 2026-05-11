@@ -1,0 +1,97 @@
+/* ============================================================
+   Editor shell — the header bar above the OSS engine
+   ============================================================ */
+
+.editor-shell {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 24px;
+  background-color: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+[data-theme="dark"] .editor-shell {
+  background-color: rgba(11, 15, 25, 0.78);
+  border-bottom-color: var(--border);
+}
+
+.editor-shell .left,
+.editor-shell .right {
+  display: flex; align-items: center; gap: 12px;
+}
+
+.editor-shell a.back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  text-decoration: none;
+  padding: 5px 9px;
+  border-radius: 7px;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.editor-shell a.back:hover {
+  color: var(--text);
+  background-color: var(--bg-grid);
+  text-decoration: none;
+}
+.editor-shell a.back svg { width: 14px; height: 14px; }
+
+.editor-shell .brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.editor-shell .brand .mark {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #6366F1, #818CF8);
+  display: grid; place-items: center;
+}
+.editor-shell .brand .mark svg { width: 12px; height: 12px; color: white; }
+
+.editor-shell .save-pill {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background-color: var(--bg-soft, #F3F4F6);
+  font-variant-numeric: tabular-nums;
+}
+.editor-shell .save-pill.saving { color: var(--accent); }
+.editor-shell .save-pill.saved { color: var(--text-dim); }
+.editor-shell .save-pill .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background-color: var(--text-muted);
+}
+.editor-shell .save-pill.saving .dot { background-color: var(--accent); animation: rb-pulse 1.2s ease-in-out infinite; }
+.editor-shell .save-pill.saved .dot { background-color: #10B981; }
+@keyframes rb-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.7); opacity: 0.5; }
+}
+
+.editor-shell .avatar {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background-color: var(--bg-grid);
+  border: 1px solid var(--border);
+  background-size: cover; background-position: center;
+}
+
+/* In cloud mode, hide the OSS first-run template overlay, the footer, and
+   the "Templates / Reset" button — these are OSS-distribution affordances
+   that don't apply when the user has a real account with a dashboard. */
+.cloud-mode #templateOverlay { display: none !important; }
+.cloud-mode footer.footer { display: none; }
+.cloud-mode #reset { display: none; }
+
+/* Use the OSS page padding more generously — the editor shell adds its own */
+.cloud-mode .page { padding-top: 16px; }

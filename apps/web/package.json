@@ -1,0 +1,13 @@
+{
+  "name": "roadbook-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Hosted Roadbook — Google login + per-user roadmaps backed by Supabase.",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/build.mjs && npx --yes serve@14 -l 5174 dist",
+    "deploy:vercel": "node tools/build.mjs && npx --yes vercel deploy --prod dist"
+  },
+  "engines": { "node": ">=18" }
+}

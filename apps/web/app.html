@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Roadmaps · Roadbook</title>
+<link rel="stylesheet" href="/src/shell.css">
+<script src="/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/src/supabase-client.js"></script>
+<script src="/src/roadmaps-api.js"></script>
+<script src="/templates.js"></script>
+</head>
+<body>
+<div class="dash-shell">
+
+  <header class="dash-header">
+    <div class="dash-brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="3" rx="1"/><rect x="3" y="11" width="13" height="3" rx="1"/><rect x="3" y="16" width="8" height="3" rx="1"/></svg>
+      </div>
+      <div class="wordmark">Roadbook</div>
+    </div>
+    <div class="dash-user">
+      <div class="avatar" id="userAvatar"></div>
+      <span class="email" id="userEmail"></span>
+      <button class="btn-ghost" id="signOut">Sign out</button>
+    </div>
+  </header>
+
+  <h1 class="dash-title">My roadmaps</h1>
+  <p class="dash-sub" id="dashSub">Loading…</p>
+
+  <div class="dash-grid" id="grid"></div>
+
+</div>
+
+<!-- Template picker for new roadmap -->
+<div class="modal-overlay" id="tplOverlay" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h3>Start a new roadmap</h3>
+    <div class="sub">Pick a starter or start blank. You can rename it anytime.</div>
+    <div class="tpl-grid" id="tplGrid"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="tplCancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename modal -->
+<div class="modal-overlay" id="renameOverlay" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h3>Rename roadmap</h3>
+    <div class="sub">Give it a name that'll be easy to spot in your list.</div>
+    <input type="text" id="renameInput" style="width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:9px; font-size:14px; font-family:inherit;">
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn-cancel" id="renameCancel">Cancel</button>
+      <button class="btn-primary" id="renameSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(async function () {
+  const TPLS = [
+    { key: "blank",              title: "Blank",              desc: "Three empty lanes — start fresh." },
+    { key: "product-launch",     title: "Product Launch",     desc: "Discovery → Build → Beta → GA." },
+    { key: "saas-quarterly",     title: "SaaS Quarterly",     desc: "Q1–Q4 with Growth / Product / Platform." },
+    { key: "engineering-sprint", title: "Engineering Sprint", desc: "Now / Next / Later × FE / BE / Infra." }
+  ];
+
+  const session = await RoadbookAuth.requireAuth();
+  if (!session) return;
+  const user = session.user;
+  document.getElementById("userEmail").textContent = user.email || "";
+  const avatar = document.getElementById("userAvatar");
+  if (user.user_metadata?.avatar_url) {
+    avatar.style.backgroundImage = `url(${user.user_metadata.avatar_url})`;
+  }
+
+  document.getElementById("signOut").addEventListener("click", () => RoadbookAuth.signOut());
+
+  const toast = (msg, error = false) => {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.toggle("error", !!error);
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 2200);
+  };
+
+  function fmtDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "";
+    const now = new Date();
+    const dayMs = 86400000;
+    const diff = Math.floor((now - d) / dayMs);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Yesterday";
+    if (diff < 7) return `${diff} days ago`;
+    if (diff < 30) return `${Math.floor(diff / 7)}w ago`;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function previewRows(data) {
+    // Show first 3 lanes from the active year with their item segments
+    const year = data?.activeYear || "2026";
+    const lanes = (data?.data?.[year]?.lanes || []).slice(0, 3);
+    const items = data?.data?.[year]?.items || [];
+    const totalDays = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+    return lanes.map((lane) => {
+      const segs = items
+        .filter((it) => it.laneId === lane.id && it.startDate && it.endDate)
+        .map((it) => {
+          const startDay = Math.max(1, Math.min(totalDays, dayOfYear(it.startDate)));
+          const endDay = Math.max(startDay, Math.min(totalDays, dayOfYear(it.endDate)));
+          const leftPct = ((startDay - 1) / totalDays) * 100;
+          const widthPct = Math.max(1.5, ((endDay - startDay + 1) / totalDays) * 100);
+          return `<span class="seg" style="left:${leftPct}%; width:${widthPct}%;"></span>`;
+        })
+        .join("");
+      return `<div class="row">${segs}</div>`;
+    }).join("");
+  }
+
+  function dayOfYear(iso) {
+    if (!iso || typeof iso !== "string") return 1;
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return 1;
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    if (isNaN(d.getTime())) return 1;
+    const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.floor((d - start) / 86400000) + 1;
+  }
+
+  let roadmaps = [];
+
+  async function refresh() {
+    roadmaps = await RoadbookAPI.list();
+    render();
+  }
+
+  function render() {
+    const grid = document.getElementById("grid");
+    const sub = document.getElementById("dashSub");
+    sub.textContent = roadmaps.length === 0
+      ? "Create your first roadmap to get started."
+      : `${roadmaps.length} roadmap${roadmaps.length === 1 ? "" : "s"} · last updated ${fmtDate(roadmaps[0].updated_at)}`;
+
+    grid.innerHTML = "";
+    // + Create card always first
+    const createCard = document.createElement("div");
+    createCard.className = "rb-card rb-card-new";
+    createCard.innerHTML = `
+      <div class="plus-circle">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+      </div>
+      <div class="label">Create roadmap</div>
+      <div class="hint">Start blank or from a template</div>
+    `;
+    createCard.addEventListener("click", openTemplatePicker);
+    grid.appendChild(createCard);
+
+    for (const r of roadmaps) {
+      const c = document.createElement("div");
+      c.className = "rb-card";
+      c.innerHTML = `
+        <div class="rb-actions">
+          <button data-action="rename" title="Rename" aria-label="Rename">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.3 2.7a1.5 1.5 0 012.1 2.1L5.5 12.7l-3 1 1-3z"/></svg>
+          </button>
+          <button data-action="delete" class="danger" title="Delete" aria-label="Delete">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h10M6 5V3h4v2M5 5l0.7 9h4.6l0.7-9"/></svg>
+          </button>
+        </div>
+        <div class="rb-title"></div>
+        <div class="rb-meta"></div>
+        <div class="rb-preview">${previewRows(r.data) || '<div class="row"></div><div class="row"></div><div class="row"></div>'}</div>
+      `;
+      c.querySelector(".rb-title").textContent = r.title || "Untitled";
+      c.querySelector(".rb-meta").textContent = `Updated ${fmtDate(r.updated_at)}`;
+      c.addEventListener("click", (e) => {
+        if (e.target.closest("[data-action]")) return; // let action buttons handle their own clicks
+        location.href = `/editor.html#${r.id}`;
+      });
+      c.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
+        e.stopPropagation(); openRename(r);
+      });
+      c.querySelector('[data-action="delete"]').addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete "${r.title || 'Untitled'}"? This cannot be undone.`)) return;
+        const ok = await RoadbookAPI.remove(r.id);
+        if (ok) { toast("Deleted"); refresh(); }
+        else toast("Delete failed", true);
+      });
+      grid.appendChild(c);
+    }
+  }
+
+  // ----- Template picker -----
+  function openTemplatePicker() {
+    const grid = document.getElementById("tplGrid");
+    grid.innerHTML = "";
+    TPLS.forEach((t) => {
+      const b = document.createElement("button");
+      b.className = "tpl-card";
+      b.innerHTML = `<div class="t"></div><div class="d"></div>`;
+      b.querySelector(".t").textContent = t.title;
+      b.querySelector(".d").textContent = t.desc;
+      b.addEventListener("click", () => createFromTemplate(t.key, t.title));
+      grid.appendChild(b);
+    });
+    document.getElementById("tplOverlay").classList.add("show");
+  }
+  function closeTpl() { document.getElementById("tplOverlay").classList.remove("show"); }
+  document.getElementById("tplCancel").addEventListener("click", closeTpl);
+  document.getElementById("tplOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "tplOverlay") closeTpl();
+  });
+
+  async function createFromTemplate(key, title) {
+    const tpl = (window.ROADBOOK_TEMPLATES || {})[key];
+    if (!tpl) { toast("Template not available", true); return; }
+    closeTpl();
+    const payload = JSON.parse(JSON.stringify(tpl));
+    // Use a friendly title; preserve template's title only for Blank's default
+    const newTitle = key === "blank" ? "Untitled roadmap" : title;
+    payload.title = newTitle;
+    const row = await RoadbookAPI.create({ title: newTitle, data: payload });
+    if (!row) { toast("Could not create roadmap", true); return; }
+    location.href = `/editor.html#${row.id}`;
+  }
+
+  // ----- Rename -----
+  let renamingId = null;
+  function openRename(r) {
+    renamingId = r.id;
+    document.getElementById("renameInput").value = r.title || "";
+    document.getElementById("renameOverlay").classList.add("show");
+    setTimeout(() => document.getElementById("renameInput").focus(), 40);
+  }
+  function closeRename() { document.getElementById("renameOverlay").classList.remove("show"); renamingId = null; }
+  document.getElementById("renameCancel").addEventListener("click", closeRename);
+  document.getElementById("renameOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "renameOverlay") closeRename();
+  });
+  document.getElementById("renameSave").addEventListener("click", async () => {
+    if (!renamingId) return;
+    const next = document.getElementById("renameInput").value.trim();
+    if (!next) return;
+    const updated = await RoadbookAPI.update(renamingId, { title: next });
+    closeRename();
+    if (updated) { toast("Renamed"); refresh(); }
+  });
+  document.getElementById("renameInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("renameSave").click();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { closeTpl(); closeRename(); }
+  });
+
+  await refresh();
+})();
+</script>
+</body>
+</html>

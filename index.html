@@ -1262,6 +1262,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     historyIndex: -1
   };
 
+  // Storage mode: "local" (default — localStorage) or "memory" (host app
+  // manages persistence externally, e.g. Supabase). Default keeps OSS behavior.
+  let storageMode = "local";
+  let onPersistCallback = null;
+  function setStorageMode(mode) { storageMode = mode === "memory" ? "memory" : "local"; }
+  function setOnPersist(cb) { onPersistCallback = typeof cb === "function" ? cb : null; }
+
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
   // ---------- Date utilities ----------
@@ -1332,6 +1339,12 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   }
 
   function load() {
+    if (storageMode === "memory") {
+      // The host app will populate the store via replaceAll(). Just take a
+      // baseline snapshot so undo/redo has an entry to fall back to.
+      snapshot();
+      return;
+    }
     try {
       const metaRaw = localStorage.getItem(META_KEY);
       if (metaRaw) {
@@ -1445,19 +1458,24 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
   function persist() {
-    try {
-      localStorage.setItem(META_KEY, JSON.stringify({
-        title: store.title,
-        eyebrow: store.eyebrow,
-        schema: SCHEMA_VERSION
-      }));
-      localStorage.setItem(ACCENT_KEY, store.accent);
-      localStorage.setItem(THEME_KEY, store.theme);
-      localStorage.setItem(YEAR_KEY, store.activeYear);
-      ["2026", "2027"].forEach((y) => {
-        localStorage.setItem(LAYOUT_KEY(y), JSON.stringify(store.data[y]));
-      });
-    } catch (_) { /* storage full or disabled */ }
+    if (storageMode === "local") {
+      try {
+        localStorage.setItem(META_KEY, JSON.stringify({
+          title: store.title,
+          eyebrow: store.eyebrow,
+          schema: SCHEMA_VERSION
+        }));
+        localStorage.setItem(ACCENT_KEY, store.accent);
+        localStorage.setItem(THEME_KEY, store.theme);
+        localStorage.setItem(YEAR_KEY, store.activeYear);
+        ["2026", "2027"].forEach((y) => {
+          localStorage.setItem(LAYOUT_KEY(y), JSON.stringify(store.data[y]));
+        });
+      } catch (_) { /* storage full or disabled */ }
+    }
+    if (onPersistCallback) {
+      try { onPersistCallback(); } catch (_) { /* host owns errors */ }
+    }
   }
 
   // ---------- History ----------
@@ -1588,6 +1606,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     PALETTE,
     SCHEMA_VERSION,
     SNAP_DAYS,
+    setStorageMode,
+    setOnPersist,
     load,
     persist,
     snapshot,
@@ -3078,11 +3098,12 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       // already loaded
     }
 
-    // First-run if everything is blank
+    // First-run if everything is blank. Skip if a host (e.g. cloud-sync) has
+    // set window.__suppressFirstRun — they'll populate state themselves.
     const s = window.Roadbook.state.get();
     const noLanes2026 = !s.data["2026"].lanes.length;
     const noLanes2027 = !s.data["2027"].lanes.length;
-    if (noLanes2026 && noLanes2027) {
+    if (noLanes2026 && noLanes2027 && !window.__suppressFirstRun) {
       // Seed with the BLANK defaults from defaults.js so the user sees a layout
       window.Roadbook.state.replaceAll({
         title: "Roadbook",

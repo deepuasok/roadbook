@@ -543,11 +543,12 @@
       // already loaded
     }
 
-    // First-run if everything is blank
+    // First-run if everything is blank. Skip if a host (e.g. cloud-sync) has
+    // set window.__suppressFirstRun — they'll populate state themselves.
     const s = window.Roadbook.state.get();
     const noLanes2026 = !s.data["2026"].lanes.length;
     const noLanes2027 = !s.data["2027"].lanes.length;
-    if (noLanes2026 && noLanes2027) {
+    if (noLanes2026 && noLanes2027 && !window.__suppressFirstRun) {
       // Seed with the BLANK defaults from defaults.js so the user sees a layout
       window.Roadbook.state.replaceAll({
         title: "Roadbook",

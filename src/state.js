@@ -42,6 +42,13 @@
     historyIndex: -1
   };
 
+  // Storage mode: "local" (default — localStorage) or "memory" (host app
+  // manages persistence externally, e.g. Supabase). Default keeps OSS behavior.
+  let storageMode = "local";
+  let onPersistCallback = null;
+  function setStorageMode(mode) { storageMode = mode === "memory" ? "memory" : "local"; }
+  function setOnPersist(cb) { onPersistCallback = typeof cb === "function" ? cb : null; }
+
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
   // ---------- Date utilities ----------
@@ -112,6 +119,12 @@
   }
 
   function load() {
+    if (storageMode === "memory") {
+      // The host app will populate the store via replaceAll(). Just take a
+      // baseline snapshot so undo/redo has an entry to fall back to.
+      snapshot();
+      return;
+    }
     try {
       const metaRaw = localStorage.getItem(META_KEY);
       if (metaRaw) {
@@ -225,19 +238,24 @@
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
 
   function persist() {
-    try {
-      localStorage.setItem(META_KEY, JSON.stringify({
-        title: store.title,
-        eyebrow: store.eyebrow,
-        schema: SCHEMA_VERSION
-      }));
-      localStorage.setItem(ACCENT_KEY, store.accent);
-      localStorage.setItem(THEME_KEY, store.theme);
-      localStorage.setItem(YEAR_KEY, store.activeYear);
-      ["2026", "2027"].forEach((y) => {
-        localStorage.setItem(LAYOUT_KEY(y), JSON.stringify(store.data[y]));
-      });
-    } catch (_) { /* storage full or disabled */ }
+    if (storageMode === "local") {
+      try {
+        localStorage.setItem(META_KEY, JSON.stringify({
+          title: store.title,
+          eyebrow: store.eyebrow,
+          schema: SCHEMA_VERSION
+        }));
+        localStorage.setItem(ACCENT_KEY, store.accent);
+        localStorage.setItem(THEME_KEY, store.theme);
+        localStorage.setItem(YEAR_KEY, store.activeYear);
+        ["2026", "2027"].forEach((y) => {
+          localStorage.setItem(LAYOUT_KEY(y), JSON.stringify(store.data[y]));
+        });
+      } catch (_) { /* storage full or disabled */ }
+    }
+    if (onPersistCallback) {
+      try { onPersistCallback(); } catch (_) { /* host owns errors */ }
+    }
   }
 
   // ---------- History ----------
@@ -368,6 +386,8 @@
     PALETTE,
     SCHEMA_VERSION,
     SNAP_DAYS,
+    setStorageMode,
+    setOnPersist,
     load,
     persist,
     snapshot,
