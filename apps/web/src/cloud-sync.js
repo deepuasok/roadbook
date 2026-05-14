@@ -105,6 +105,9 @@
     ownerId: row.user_id,
     currentUser: user
   };
+  // Notify collaboration.js (which may already be waiting) and any future
+  // listeners. The CustomEvent fires once the context is fully populated.
+  document.dispatchEvent(new CustomEvent("roadbook:collab-ready", { detail: window.RoadbookCollab }));
 
   if (!isOwner) {
     // Block all engine mutations for collaborators in Cut A. Cut B/C will

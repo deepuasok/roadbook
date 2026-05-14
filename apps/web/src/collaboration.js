@@ -2,16 +2,33 @@
 // Loaded only by the cloud editor build. Relies on window.RoadbookCollab
 // being populated by cloud-sync.js (role + roadmapId + currentUser).
 (async function () {
-  // Wait for cloud-sync to populate context.
+  // Wait for DOMContentLoaded so all elements are in the DOM.
   await new Promise((r) => (document.readyState === "loading"
     ? document.addEventListener("DOMContentLoaded", r, { once: true })
     : setTimeout(r, 0)));
-  // Allow a few microtasks for cloud-sync to land.
-  for (let i = 0; i < 20; i++) {
-    if (window.RoadbookCollab) break;
-    await new Promise((r) => setTimeout(r, 25));
+  // Wait for cloud-sync to publish RoadbookCollab — either via the explicit
+  // CustomEvent it dispatches when ready, or by polling as a fallback (in
+  // case the event already fired before this handler attached).
+  if (!window.RoadbookCollab) {
+    await new Promise((resolve) => {
+      let done = false;
+      const fire = () => { if (!done) { done = true; resolve(); } };
+      document.addEventListener("roadbook:collab-ready", fire, { once: true });
+      // Fallback: poll every 100ms up to 15 seconds in case the event fired
+      // before this listener was attached (or never fires due to an error
+      // earlier in cloud-sync.js).
+      let elapsed = 0;
+      const iv = setInterval(() => {
+        elapsed += 100;
+        if (window.RoadbookCollab) { clearInterval(iv); fire(); }
+        else if (elapsed >= 15000) { clearInterval(iv); fire(); }
+      }, 100);
+    });
   }
-  if (!window.RoadbookCollab || !window.RoadbookAPI) return;
+  if (!window.RoadbookCollab || !window.RoadbookAPI) {
+    console.warn("[collab] RoadbookCollab or RoadbookAPI missing — collaboration UI not initializing");
+    return;
+  }
 
   const ctx = window.RoadbookCollab;
   const { roadmapId, isOwner, currentUser } = ctx;
