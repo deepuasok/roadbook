@@ -47,17 +47,6 @@ create policy "roadmaps_select_own"
   on public.roadmaps for select
   using (auth.uid() = user_id);
 
--- Collaborators can also SELECT roadmaps they're shared on
-create policy "roadmaps_select_collaborator"
-  on public.roadmaps for select
-  using (
-    exists (
-      select 1 from public.roadmap_collaborators c
-      where c.roadmap_id = roadmaps.id
-        and c.user_id = auth.uid()
-    )
-  );
-
 -- INSERT / UPDATE / DELETE remain owner-only
 create policy "roadmaps_insert_own"
   on public.roadmaps for insert
@@ -70,6 +59,9 @@ create policy "roadmaps_update_own"
 create policy "roadmaps_delete_own"
   on public.roadmaps for delete
   using (auth.uid() = user_id);
+
+-- The collaborator SELECT policy is added later, after roadmap_collaborators
+-- is created (Postgres requires the referenced table to exist at policy time).
 
 -- Index for ordering the dashboard by recency
 create index if not exists idx_roadmaps_user_updated
@@ -91,6 +83,18 @@ create table if not exists public.roadmap_collaborators (
 
 create index if not exists idx_collab_user on public.roadmap_collaborators (user_id);
 create index if not exists idx_collab_roadmap on public.roadmap_collaborators (roadmap_id);
+
+-- Now that roadmap_collaborators exists, add the SELECT policy on
+-- public.roadmaps that lets collaborators see the rows they're shared on.
+create policy "roadmaps_select_collaborator"
+  on public.roadmaps for select
+  using (
+    exists (
+      select 1 from public.roadmap_collaborators c
+      where c.roadmap_id = roadmaps.id
+        and c.user_id = auth.uid()
+    )
+  );
 
 -- Pending email-based invitations. Auto-claimed via trigger when the invitee
 -- signs in (or immediately if they already have an account).
