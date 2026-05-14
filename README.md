@@ -14,7 +14,7 @@ Built for the case where the PM just needs a clean swim-lane roadmap they can ed
 
 ## Quick start
 
-**Use it (no install):** open [the hosted version](#) or download `index.html` and double-click.
+**Use it (no install):** open the [live demo](https://deepuasok.github.io/roadbook/) or download `index.html` and double-click.
 
 **Fork and host:**
 ```bash
