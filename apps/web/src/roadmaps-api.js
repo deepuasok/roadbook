@@ -267,6 +267,23 @@
     return data;
   }
 
+  // ---------- Participant directory (owner + collaborators) ----------
+  // Returns a map of user_id → { email, full_name }. Falls back to empty
+  // if not signed in or local-mode. Calls the security-definer RPC so the
+  // anon client can read auth.users details for this roadmap's participants.
+  async function participantDirectory(roadmapId) {
+    if (isLocal()) return {};
+    const client = sb();
+    if (!client) return {};
+    const { data, error } = await client.rpc("roadmap_participant_emails", { p_roadmap_id: roadmapId });
+    if (error) { console.error(error); return {}; }
+    const map = {};
+    for (const row of data || []) {
+      map[row.user_id] = { email: row.email, full_name: row.full_name };
+    }
+    return map;
+  }
+
   // ---------- Comment counts per item (for badges) ----------
   // Returns a map of item_id → { open: number, total: number } so the editor
   // can paint badges in one fetch instead of N.
@@ -393,6 +410,7 @@
     listSharedWithMe,
     listCollaborators, listInvitations, inviteCollaborator, removeCollaborator, cancelInvitation,
     listComments, addComment, resolveComment, unresolveComment, commentCounts,
-    listProposals, createProposal, decideProposal, cancelProposal
+    listProposals, createProposal, decideProposal, cancelProposal,
+    participantDirectory
   };
 })();

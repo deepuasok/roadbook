@@ -188,6 +188,32 @@ create unique index if not exists idx_proposals_one_pending_per_author
   on public.roadmap_proposals (roadmap_id, kind, target_id, author_id)
   where status = 'pending';
 
+-- ----- Participant directory (security definer) -----
+-- The browser anon client cannot read auth.users directly. This function
+-- returns owner + collaborator emails/names for a roadmap, but only if
+-- the caller is themselves a participant on that roadmap. Used by the
+-- share modal, pending proposals panel, and comments to show real names
+-- instead of UUID prefixes.
+create or replace function public.roadmap_participant_emails(p_roadmap_id uuid)
+returns table(user_id uuid, email text, full_name text)
+language sql
+security definer set search_path = public
+stable
+as $$
+  select u.id, u.email::text, (u.raw_user_meta_data->>'full_name')::text
+  from auth.users u
+  where (
+    exists (select 1 from public.roadmaps r where r.id = p_roadmap_id and r.user_id = u.id)
+    or exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = p_roadmap_id and c.user_id = u.id)
+  )
+  and (
+    public.is_roadmap_owner(p_roadmap_id) or public.is_roadmap_collaborator(p_roadmap_id)
+  );
+$$;
+
+-- Allow the anon role (authenticated browser clients) to call it.
+grant execute on function public.roadmap_participant_emails(uuid) to authenticated;
+
 -- ----- Auto-claim invitations -----
 -- Single function used by both triggers below. Looks up any pending
 -- invitations for the given email, materializes them as collaborator rows,

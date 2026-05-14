@@ -65,26 +65,39 @@
     return (id || "").slice(0, 8);
   }
 
-  // Resolve a user_id to a display name. Auth.users isn't directly queryable
-  // by the client, but the current user is known. Collaborator rows in the
-  // share list will show shortened IDs for others (Cut B can add a /me-style
-  // endpoint or a public users view). For comments where the author is the
-  // current user, we show "You".
+  // Participant directory — populated once on init via the SECURITY DEFINER
+  // RPC roadmap_participant_emails(roadmap_id). Maps user_id → {email, full_name}.
+  // Lets us show real names/emails in the share modal, pending proposals,
+  // and comments instead of UUID prefixes.
+  let participants = {};
+  async function loadParticipants() {
+    try {
+      participants = await window.RoadbookAPI.participantDirectory(roadmapId);
+    } catch (e) { console.warn("[collab] could not load participant directory", e); }
+  }
+
   function nameForUser(userId) {
     if (!userId) return "Someone";
     if (currentUser && userId === currentUser.id) return "You";
+    const p = participants[userId];
+    if (p) return p.full_name || p.email || ("User " + shortId(userId));
     return "User " + shortId(userId);
   }
 
-  // 2-letter monogram for a user. Uses real name when we have it (current
-  // user), falls back to deterministic UUID prefix otherwise.
+  // 2-letter monogram for a user. Uses real name if we have it via the
+  // participant directory; falls back to deterministic UUID prefix.
   function monogramForUser(userId) {
     if (!userId) return "??";
+    let name = null;
     if (currentUser && userId === currentUser.id) {
-      const name = currentUser.user_metadata?.full_name || currentUser.email || "Me";
-      const parts = String(name).trim().split(/\s+/).filter(Boolean);
+      name = currentUser.user_metadata?.full_name || currentUser.email || "Me";
+    } else if (participants[userId]) {
+      name = participants[userId].full_name || participants[userId].email;
+    }
+    if (name) {
+      const parts = String(name).trim().split(/[\s.@]+/).filter(Boolean);
       if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-      return (parts[0] || "M").slice(0, 2).toUpperCase();
+      return (parts[0] || "?").slice(0, 2).toUpperCase();
     }
     return userId.replace(/-/g, "").slice(0, 2).toUpperCase();
   }
@@ -154,7 +167,8 @@
     collabList.innerHTML = '<div class="collab-empty">Loading…</div>';
     const [collabs, invites] = await Promise.all([
       window.RoadbookAPI.listCollaborators(roadmapId),
-      window.RoadbookAPI.listInvitations(roadmapId)
+      window.RoadbookAPI.listInvitations(roadmapId),
+      loadParticipants()
     ]);
     collabList.innerHTML = "";
     if (collabs.length === 0 && invites.length === 0) {
@@ -172,8 +186,13 @@
         <span class="status">Active</span>
         <button class="collab-revoke" type="button">Remove</button>
       `;
-      row.querySelector(".name").textContent = nameForUser(c.user_id);
-      row.querySelector("small").textContent = "Joined " + fmtTime(c.invited_at);
+      const p = participants[c.user_id];
+      const nameLine = p?.full_name || p?.email || nameForUser(c.user_id);
+      row.querySelector(".name").textContent = nameLine;
+      const subtitleParts = [];
+      if (p?.full_name && p?.email) subtitleParts.push(p.email);
+      subtitleParts.push("Joined " + fmtTime(c.invited_at));
+      row.querySelector("small").textContent = subtitleParts.join(" · ");
       row.querySelector("button").addEventListener("click", async () => {
         if (!confirm("Remove this collaborator's access?")) return;
         const ok = await window.RoadbookAPI.removeCollaborator(c.id);
@@ -347,7 +366,13 @@
   }
 
   async function refreshProposals() {
-    pendingProposals = await window.RoadbookAPI.listProposals(roadmapId, "pending");
+    // Refresh the participant directory at the same time — invites can add
+    // new participants and we want names up to date.
+    const [props] = await Promise.all([
+      window.RoadbookAPI.listProposals(roadmapId, "pending"),
+      loadParticipants()
+    ]);
+    pendingProposals = props;
     paintPendingBadges();
     if (isOwner) renderPendingPanelContent();
   }
