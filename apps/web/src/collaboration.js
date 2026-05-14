@@ -79,7 +79,12 @@
   // ============================================================
   //  SHARE MODAL (owner-only)
   // ============================================================
-  const shareBtn = document.getElementById("shareBtn");
+  // Renamed from "shareBtn" to "inviteBtn" because the engine's existing
+  // Share dropdown also uses id="shareBtn" — duplicate IDs were causing
+  // getElementById to return the wrong element and bind handlers to the
+  // wrong button. Labeling this "Invite" also makes its purpose clearer
+  // alongside the engine's Share (which exports to PNG/SVG/link).
+  const shareBtn = document.getElementById("inviteBtn");
   const shareOverlay = document.getElementById("shareOverlay");
   const inviteEmail = document.getElementById("inviteEmail");
   const inviteSend = document.getElementById("inviteSend");
