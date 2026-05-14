@@ -432,6 +432,9 @@
     modalCommentsInjected = true;
   }
 
+  // Per-modal-open state for the show-resolved toggle.
+  let modalShowResolved = false;
+
   async function loadCommentsIntoModal(itemId) {
     injectModalComments();
     const listEl = document.getElementById("modalCommentsList");
@@ -439,13 +442,17 @@
     if (!listEl || !inputEl) return;
     inputEl.value = "";
     listEl.innerHTML = '<div class="comments-empty">Loading…</div>';
-    const list = await window.RoadbookAPI.listComments(roadmapId, itemId);
-    if (list.length === 0) {
+    const all = await window.RoadbookAPI.listComments(roadmapId, itemId);
+    const open = all.filter((c) => !c.resolved_at);
+    const resolved = all.filter((c) => c.resolved_at);
+
+    if (all.length === 0) {
       listEl.innerHTML = '<div class="comments-empty">No comments yet.</div>';
       return;
     }
     listEl.innerHTML = "";
-    for (const c of list) {
+
+    const renderOne = (c) => {
       const row = document.createElement("div");
       row.className = "comment" + (c.resolved_at ? " resolved" : "");
       row.innerHTML = `
@@ -463,6 +470,7 @@
       row.querySelector(".comment-body").textContent = c.body;
       const acts = row.querySelector(".comment-actions");
       const canResolve = c.author_id === currentUser.id || isOwner;
+      const canDelete = c.author_id === currentUser.id || isOwner;
       if (canResolve) {
         const b = document.createElement("button");
         b.type = "button";
@@ -475,7 +483,46 @@
         });
         acts.appendChild(b);
       }
-      listEl.appendChild(row);
+      if (canDelete) {
+        const d = document.createElement("button");
+        d.type = "button";
+        d.className = "comment-delete";
+        d.textContent = "Delete";
+        d.addEventListener("click", async () => {
+          if (!confirm("Delete this comment?")) return;
+          await window.RoadbookAPI.deleteComment(c.id);
+          loadCommentsIntoModal(itemId);
+          refreshBadges();
+        });
+        acts.appendChild(d);
+      }
+      return row;
+    };
+
+    // Open comments first
+    if (open.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "comments-empty";
+      empty.textContent = "No open comments.";
+      listEl.appendChild(empty);
+    } else {
+      for (const c of open) listEl.appendChild(renderOne(c));
+    }
+
+    // Resolved section (collapsed by default)
+    if (resolved.length > 0) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "comments-show-resolved";
+      toggle.textContent = (modalShowResolved ? "Hide" : "Show") + ` resolved (${resolved.length})`;
+      toggle.addEventListener("click", () => {
+        modalShowResolved = !modalShowResolved;
+        loadCommentsIntoModal(itemId);
+      });
+      listEl.appendChild(toggle);
+      if (modalShowResolved) {
+        for (const c of resolved) listEl.appendChild(renderOne(c));
+      }
     }
   }
 
@@ -778,18 +825,19 @@
       const existing = card.querySelector(".comment-badge");
       if (existing) existing.remove();
       const counts = badgeCounts[id];
-      if (!counts || counts.total === 0) return;
+      // Only show a badge when there are OPEN (unresolved) comments. Resolved
+      // ones disappear from the tile — they're still in the DB and visible
+      // inside the modal via "Show resolved", but they don't clutter the UI.
+      if (!counts || !counts.open || counts.open === 0) return;
       const badge = document.createElement("button");
       badge.type = "button";
-      badge.className = "comment-badge" + (counts.open > 0 ? " has-open" : "");
+      badge.className = "comment-badge has-open";
       badge.innerHTML = `
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5a2 2 0 012-2h6a2 2 0 012 2v4a2 2 0 01-2 2H6l-3 2.5V5z"/></svg>
         <span></span>
       `;
-      badge.querySelector("span").textContent = counts.open > 0 ? counts.open : counts.total;
-      badge.title = counts.open > 0
-        ? `${counts.open} open · ${counts.total} total`
-        : `${counts.total} resolved`;
+      badge.querySelector("span").textContent = counts.open;
+      badge.title = `${counts.open} open comment${counts.open > 1 ? "s" : ""}`;
       badge.addEventListener("click", (e) => {
         e.stopPropagation();
         // Open the edit modal (which now has an inline Comments section)

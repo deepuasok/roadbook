@@ -338,6 +338,11 @@ create policy "comments_delete_self"
   on public.roadmap_comments for delete
   using (author_id = auth.uid());
 
+drop policy if exists "comments_delete_owner" on public.roadmap_comments;
+create policy "comments_delete_owner"
+  on public.roadmap_comments for delete
+  using (public.is_roadmap_owner(roadmap_id));
+
 -- ----- RLS: roadmap_proposals -----
 alter table public.roadmap_proposals enable row level security;
 

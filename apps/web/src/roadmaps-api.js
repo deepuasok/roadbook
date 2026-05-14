@@ -267,6 +267,15 @@
     return data;
   }
 
+  async function deleteComment(commentId) {
+    if (isLocal()) return false;
+    const client = sb();
+    if (!client) return false;
+    const { error } = await client.from("roadmap_comments").delete().eq("id", commentId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }
+
   // ---------- Participant directory (owner + collaborators) ----------
   // Returns a map of user_id → { email, full_name }. Falls back to empty
   // if not signed in or local-mode. Calls the security-definer RPC so the
@@ -409,7 +418,7 @@
     list, get, create, update, remove,
     listSharedWithMe,
     listCollaborators, listInvitations, inviteCollaborator, removeCollaborator, cancelInvitation,
-    listComments, addComment, resolveComment, unresolveComment, commentCounts,
+    listComments, addComment, resolveComment, unresolveComment, deleteComment, commentCounts,
     listProposals, createProposal, decideProposal, cancelProposal,
     participantDirectory
   };
