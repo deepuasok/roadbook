@@ -167,6 +167,19 @@ create table if not exists public.roadmap_proposals (
 
 create index if not exists idx_proposals_roadmap_status on public.roadmap_proposals (roadmap_id, status);
 
+-- One-time cleanup before adding the coalesce index: collapse any
+-- duplicate pending proposals from before this constraint existed,
+-- keeping only the most-recently-created row per group. Idempotent —
+-- on fresh databases there are no duplicates and this deletes nothing.
+delete from public.roadmap_proposals
+where status = 'pending'
+  and id not in (
+    select distinct on (roadmap_id, kind, target_id, author_id) id
+    from public.roadmap_proposals
+    where status = 'pending'
+    order by roadmap_id, kind, target_id, author_id, created_at desc
+  );
+
 -- Coalesce: at most one pending proposal per (roadmap, kind, target, author).
 -- Re-proposing the same change on the same item updates the existing row
 -- via UPSERT instead of inserting a new one. Only enforced for status=pending;
