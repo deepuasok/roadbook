@@ -315,6 +315,87 @@
 }
 .comment-badge.has-open svg { color: #b45309; }
 
+/* ----- Collaborator mode — hide controls that wouldn't work ----- */
+/* setCanCommit blocks the underlying actions anyway, but the buttons
+   visible-but-dead is worse UX than just not showing them. */
+body.collab-mode #undoBtn,
+body.collab-mode #redoBtn,
+body.collab-mode #addLane {
+  display: none;
+}
+
+/* Cards that are "moved into" their pending-proposal position by the
+   collaborator: amber outline so the collaborator can see what they've
+   proposed, and the card visually sits at the new spot. */
+.card.pending-mine {
+  outline: 2px dashed #b45309;
+  outline-offset: -2px;
+  position: relative;
+}
+.card.pending-mine::after {
+  content: "Pending";
+  position: absolute;
+  top: -7px;
+  right: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #b45309;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 6;
+}
+
+/* ----- Cancel-proposal popover (collaborator's own pending change) ----- */
+.cancel-popover {
+  position: absolute;
+  background: white;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+  padding: 12px;
+  width: 240px;
+  z-index: 250;
+  font-family: inherit;
+}
+.cancel-popover .cp-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #18181b;
+  margin-bottom: 4px;
+}
+.cancel-popover .cp-detail {
+  font-size: 12px;
+  color: #52525b;
+  line-height: 1.5;
+  margin: 4px 0 8px;
+}
+.cancel-popover .cp-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.cancel-popover .cp-actions button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #e4e4e7;
+  background: white;
+  cursor: pointer;
+  color: #18181b;
+}
+.cancel-popover .cp-cancel {
+  background: white;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+.cancel-popover .cp-cancel:hover { background: #fef2f2; }
+
 /* ----- Proposal ghost cards (Cut B) ----- */
 /* Renders at the proposed position with the same coordinate system as a
    real card (--start-day / --span-days / --row), but with a dotted dimmed

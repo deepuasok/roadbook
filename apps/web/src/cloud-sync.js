@@ -117,6 +117,15 @@
     window.Roadbook.state.setCanCommit(() => false);
     setSaveStatus("readonly", "Read-only · changes go to owner");
 
+    // Disable undo/redo — collaborators have no history to undo (their
+    // drags become proposals, never commits). Pressing Cmd+Z would pop a
+    // stale state and corrupt the view.
+    const noop = () => false;
+    window.Roadbook.state.undo = noop;
+    window.Roadbook.state.redo = noop;
+    // Mark body so we can hide the undo/redo buttons via CSS
+    document.body.classList.add("collab-mode");
+
     // Register the drag-intent handler. MUST be synchronous and return
     // false so drag.js skips the commit and the card visually snaps back.
     // The API call is fire-and-forget; UI updates via refreshProposals once

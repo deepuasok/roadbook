@@ -335,57 +335,93 @@
     paintProposalGhosts();
   }
 
+  // Two distinct rendering modes:
+  //   - Owner: render every pending update-item proposal as a dotted ghost
+  //     card at the proposed position; the canonical item stays in place.
+  //     Click the ghost → approval popover.
+  //   - Collaborator: for their OWN proposals, mutate the canonical item's
+  //     card (move/resize via CSS variables, reparent to new lane) so the
+  //     roadmap reads as if the change were already applied, marked with
+  //     a "Pending" badge. Click the pending card → cancel popover.
   function paintProposalGhosts() {
+    // Always clear stale ghosts and pending-mine state first
     document.querySelectorAll(".proposal-ghost").forEach((g) => g.remove());
+    document.querySelectorAll(".card.pending-mine").forEach((c) => {
+      c.classList.remove("pending-mine");
+      delete c.dataset.proposalId;
+    });
+
     const activeYear = activeYearStr();
     const totalDays = totalDaysForYear(activeYear);
 
     for (const p of pendingProposals) {
-      if (p.kind !== "update-item") continue;  // Cut B only handles move/resize
+      if (p.kind !== "update-item") continue;
       const payload = p.payload || {};
       if (!payload.startDate || !payload.endDate || !payload.laneId) continue;
-      // Skip proposals for a different year
       if (yearFromIso(payload.startDate) !== activeYear) continue;
-
-      const body = document.querySelector(`.lane-body[data-lane="${payload.laneId}"]`);
-      if (!body) continue;
 
       const startDay = dayOfYear(payload.startDate);
       const endDay = dayOfYear(payload.endDate);
       const spanDays = Math.max(1, endDay - startDay + 1);
       const row = payload.row || 0;
 
-      // The engine sets --total-days on the page root via inline style;
-      // we replicate locally for safety.
-      const ghost = document.createElement("div");
-      ghost.className = "proposal-ghost";
-      if (p.author_id === currentUser.id) ghost.classList.add("mine");
-      ghost.style.setProperty("--start-day", startDay);
-      ghost.style.setProperty("--span-days", spanDays);
-      ghost.style.setProperty("--row", row);
-      ghost.style.setProperty("--total-days", totalDays);
-      ghost.dataset.proposalId = p.id;
+      // Branch on author identity
+      const mineOwnProposal = (!isOwner && p.author_id === currentUser.id);
 
-      // Look up the underlying item title for context
-      let title = "Suggested change";
-      try {
-        const it = window.Roadbook?.state?.findItem?.(p.target_id);
-        if (it && it.title) title = it.title;
-      } catch (_) { /* ignore */ }
+      if (mineOwnProposal) {
+        // Move/resize the canonical card to the proposed position.
+        const card = document.querySelector(`.card[data-id="${p.target_id}"]`);
+        if (!card) continue;
+        card.style.setProperty("--start-day", startDay);
+        card.style.setProperty("--span-days", spanDays);
+        card.style.setProperty("--row", row);
+        // Reparent if lane changed
+        const currentBody = card.parentElement;
+        const wantedBody = document.querySelector(`.lane-body[data-lane="${payload.laneId}"]`);
+        if (wantedBody && currentBody !== wantedBody) wantedBody.appendChild(card);
+        card.classList.add("pending-mine");
+        card.dataset.proposalId = p.id;
+      } else if (isOwner) {
+        // Render a dotted ghost at the proposed position for owner review
+        const body = document.querySelector(`.lane-body[data-lane="${payload.laneId}"]`);
+        if (!body) continue;
 
-      ghost.innerHTML = `
-        <span class="ghost-title"></span>
-        <span class="ghost-monogram"></span>
-      `;
-      ghost.querySelector(".ghost-title").textContent = title;
-      ghost.querySelector(".ghost-monogram").textContent = monogramForUser(p.author_id);
-      ghost.title = `Proposal by ${nameForUser(p.author_id)}: ${fmtDateShort(payload.startDate)} - ${fmtDateShort(payload.endDate)}`;
-      ghost.addEventListener("click", (e) => {
-        e.stopPropagation();
-        openApprovalPopover(p, ghost);
-      });
-      body.appendChild(ghost);
+        const ghost = document.createElement("div");
+        ghost.className = "proposal-ghost";
+        ghost.style.setProperty("--start-day", startDay);
+        ghost.style.setProperty("--span-days", spanDays);
+        ghost.style.setProperty("--row", row);
+        ghost.style.setProperty("--total-days", totalDays);
+        ghost.dataset.proposalId = p.id;
+
+        let title = "Suggested change";
+        try {
+          const it = window.Roadbook?.state?.findItem?.(p.target_id);
+          if (it && it.title) title = it.title;
+        } catch (_) { /* ignore */ }
+
+        ghost.innerHTML = `
+          <span class="ghost-title"></span>
+          <span class="ghost-monogram"></span>
+        `;
+        ghost.querySelector(".ghost-title").textContent = title;
+        ghost.querySelector(".ghost-monogram").textContent = monogramForUser(p.author_id);
+        ghost.title = `Proposal by ${nameForUser(p.author_id)}: ${fmtDateShort(payload.startDate)} - ${fmtDateShort(payload.endDate)}`;
+        ghost.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openApprovalPopover(p, ghost);
+        });
+        body.appendChild(ghost);
+      }
+      // Collaborator viewing someone ELSE's proposal: don't render anything
+      // (shouldn't happen — RLS lets them only see their own + owner's, and
+      // owner doesn't make proposals — but harmless either way).
     }
+
+    // No extra click handlers needed on pending-mine cards — the engine's
+    // existing pointerup handler calls window.Roadbook.modal.open(itemId),
+    // which we've overridden above to route pending-mine clicks to
+    // openCancelPopover.
   }
 
   function openApprovalPopover(proposal, ghostEl) {
@@ -486,11 +522,79 @@
     });
   }
 
-  // Close popover on outside click
-  document.addEventListener("click", (e) => {
-    if (openPopover && !e.target.closest(".approval-popover") && !e.target.closest(".proposal-ghost")) {
-      closePopover();
+  // Cancel popover — collaborator clicks their own pending-mine card to
+  // either back out the proposal or open a comments thread on the item.
+  function openCancelPopover(proposal, anchorEl) {
+    closePopover();
+    const payload = proposal.payload || {};
+    const item = window.Roadbook?.state?.findItem?.(proposal.target_id);
+
+    const deltaParts = [];
+    if (item) {
+      if (payload.startDate !== item.startDate)
+        deltaParts.push(`Start: ${fmtDateShort(item.startDate)} → ${fmtDateShort(payload.startDate)}`);
+      if (payload.endDate !== item.endDate)
+        deltaParts.push(`End: ${fmtDateShort(item.endDate)} → ${fmtDateShort(payload.endDate)}`);
+      if (payload.laneId !== item.laneId) {
+        const oldLane = window.Roadbook?.state?.findLane?.(item.laneId)?.name || item.laneId;
+        const newLane = window.Roadbook?.state?.findLane?.(payload.laneId)?.name || payload.laneId;
+        deltaParts.push(`Lane: ${oldLane} → ${newLane}`);
+      }
     }
+    const deltaText = deltaParts.join("\n") || "Your pending change";
+
+    const pop = document.createElement("div");
+    pop.className = "cancel-popover";
+    pop.innerHTML = `
+      <div class="cp-title">Pending proposal</div>
+      <div class="cp-detail"></div>
+      <div class="ap-delta"></div>
+      <div class="cp-actions">
+        <button class="cp-comment" type="button">Comment</button>
+        <button class="cp-cancel" type="button">Cancel proposal</button>
+      </div>
+    `;
+    pop.querySelector(".cp-detail").textContent = item ? `Waiting on owner approval for "${item.title}"` : "Waiting on owner approval";
+    pop.querySelector(".ap-delta").textContent = deltaText;
+    pop.querySelector(".ap-delta").style.cssText = "font-size:12px;background:#fafafa;border:1px solid #ececef;border-radius:6px;padding:6px 8px;margin-bottom:10px;font-family:ui-monospace,Menlo,monospace;white-space:pre-line;";
+
+    document.body.appendChild(pop);
+    const rect = anchorEl.getBoundingClientRect();
+    const popRect = pop.getBoundingClientRect();
+    let top = rect.bottom + 8 + window.scrollY;
+    let left = rect.left + window.scrollX;
+    const maxLeft = window.innerWidth - popRect.width - 12;
+    if (left > maxLeft) left = maxLeft;
+    if (left < 12) left = 12;
+    if (top + popRect.height > window.innerHeight + window.scrollY - 12) {
+      top = rect.top + window.scrollY - popRect.height - 8;
+    }
+    pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
+    openPopover = pop;
+
+    pop.querySelector(".cp-comment").addEventListener("click", () => {
+      closePopover();
+      openCommentsPanel(proposal.target_id);
+    });
+    pop.querySelector(".cp-cancel").addEventListener("click", async () => {
+      const ok = await window.RoadbookAPI.cancelProposal(proposal.id);
+      if (ok) toast("Proposal cancelled");
+      closePopover();
+      refreshProposals();
+      // Force re-render so the card snaps back to canonical state
+      if (window.Roadbook?.app?.fullRender) window.Roadbook.app.fullRender();
+    });
+  }
+
+  // Close popover on outside click (both approval and cancel variants)
+  document.addEventListener("click", (e) => {
+    if (!openPopover) return;
+    if (e.target.closest(".approval-popover")) return;
+    if (e.target.closest(".cancel-popover")) return;
+    if (e.target.closest(".proposal-ghost")) return;
+    if (e.target.closest(".card.pending-mine")) return;
+    closePopover();
   });
 
   // Re-paint proposals on engine re-renders (covers fullRender + year switch)
@@ -567,16 +671,21 @@
   // ============================================================
   //  CLICK-OVERRIDE for collaborators
   // ============================================================
-  // For collaborators: clicking a tile opens the comments panel instead of
-  // the edit modal. We accomplish this by wrapping window.Roadbook.modal.open.
-  // Owners get the edit modal as usual; the badge they click goes through a
-  // separate path that opens comments directly.
+  // For collaborators clicking a tile:
+  //   - If the tile is one of THEIR pending-mine cards → cancel popover
+  //   - Otherwise → comments panel (instead of the engine edit modal)
+  // Owners get the engine edit modal as usual; ghost click → approval popover.
   if (!isOwner && window.Roadbook?.modal?.open) {
     const originalOpen = window.Roadbook.modal.open.bind(window.Roadbook.modal);
     window.Roadbook.modal.open = function (itemId) {
+      const card = document.querySelector(`.card[data-id="${itemId}"]`);
+      if (card && card.classList.contains("pending-mine")) {
+        const proposalId = card.dataset.proposalId;
+        const proposal = pendingProposals.find((p) => p.id === proposalId);
+        if (proposal) { openCancelPopover(proposal, card); return; }
+      }
       openCommentsPanel(itemId);
     };
-    // Keep the original accessible in case we ever need it
     window.Roadbook.modal._originalOpen = originalOpen;
   }
 
