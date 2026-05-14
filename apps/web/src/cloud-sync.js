@@ -126,45 +126,11 @@
     // Mark body so we can hide the undo/redo buttons via CSS
     document.body.classList.add("collab-mode");
 
-    // Register the drag-intent handler. MUST be synchronous and return
-    // false so drag.js skips the commit and the card visually snaps back.
-    // The API call is fire-and-forget; UI updates via refreshProposals once
-    // the row exists.
-    window.Roadbook.drag.setOnDropIntent((item, kind, patch) => {
-      const baseSnapshot = {
-        startDate: item.startDate,
-        endDate: item.endDate,
-        laneId: item.laneId,
-        row: item.row
-      };
-      // Full final state = base overlaid with patch fields
-      const proposed = { ...baseSnapshot, ...patch };
-      // Fire and forget; don't await inside the engine's sync drop handler
-      window.RoadbookAPI.createProposal(roadmapId, {
-        kind: "update-item",
-        target_id: item.id,
-        payload: proposed,
-        base_snapshot: baseSnapshot,
-        note: null
-      }).then((result) => {
-        if (result.error) {
-          if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast(result.error, true);
-        } else {
-          if (window.RoadbookCollab?.toast) {
-            const label = kind === "move" ? "Move suggested"
-              : kind === "resize-end" ? "Resize suggested"
-              : kind === "resize-start" ? "Resize suggested"
-              : "Change suggested";
-            window.RoadbookCollab.toast(label);
-          }
-          if (window.RoadbookCollab?.refreshProposals) window.RoadbookCollab.refreshProposals();
-        }
-      }).catch((e) => {
-        console.error("createProposal failed", e);
-        if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast("Could not send proposal", true);
-      });
-      return false; // synchronous block — card snaps back via replaceCard
-    });
+    // The drag-intent handler is wired in collaboration.js, where we have
+    // direct access to the pendingProposals array and the paint pipeline.
+    // That avoids the round-trip flicker: we add an optimistic local
+    // proposal on drop, paint immediately, and reconcile with the real
+    // row when the API responds.
   } else {
     setSaveStatus("saved", "Saved");
   }

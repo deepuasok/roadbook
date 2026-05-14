@@ -331,8 +331,92 @@
   }
 
   async function refreshProposals() {
-    pendingProposals = await window.RoadbookAPI.listProposals(roadmapId, "pending");
+    const fresh = await window.RoadbookAPI.listProposals(roadmapId, "pending");
+    // Preserve any optimistic local entries that don't yet have a real id
+    const optimistic = pendingProposals.filter((p) => p._optimistic);
+    pendingProposals = [...fresh, ...optimistic];
     paintProposalGhosts();
+  }
+
+  // Add an optimistic local proposal so the UI reflects the change instantly,
+  // before the API roundtrip. Returns the temporary id.
+  function addOptimisticProposal(p) {
+    const tempId = "tmp-" + Math.random().toString(36).slice(2, 10);
+    pendingProposals.push({ ...p, id: tempId, status: "pending", _optimistic: true });
+    return tempId;
+  }
+  function replaceOptimistic(tempId, realRow) {
+    pendingProposals = pendingProposals.map((p) => p.id === tempId ? { ...realRow, _optimistic: false } : p);
+  }
+  function removeProposal(id) {
+    pendingProposals = pendingProposals.filter((p) => p.id !== id);
+  }
+
+  // ----- Drag intent handler (collaborator only) -----
+  // Capture drag/resize drops as proposals AND optimistically apply them
+  // visually so the collaborator sees the card at the new position right
+  // away — no flicker waiting for the API roundtrip.
+  if (!isOwner && window.Roadbook?.drag?.setOnDropIntent) {
+    window.Roadbook.drag.setOnDropIntent((item, kind, patch) => {
+      const baseSnapshot = {
+        startDate: item.startDate,
+        endDate: item.endDate,
+        laneId: item.laneId,
+        row: item.row
+      };
+      const proposed = { ...baseSnapshot, ...patch };
+
+      // 1. Optimistic local proposal so paintProposalGhosts moves the card.
+      const tempId = addOptimisticProposal({
+        kind: "update-item",
+        target_id: item.id,
+        author_id: currentUser.id,
+        payload: proposed,
+        base_snapshot: baseSnapshot
+      });
+
+      // 2. Engine is about to call replaceCard, which recreates the card at
+      //    its (unchanged) original position. Defer paint to after that.
+      Promise.resolve().then(() => {
+        paintProposalGhosts();
+        // Adjust lane heights to fit moved cards
+        if (window.Roadbook?.app?.resizeLaneBody) {
+          if (baseSnapshot.laneId) window.Roadbook.app.resizeLaneBody(baseSnapshot.laneId);
+          if (proposed.laneId && proposed.laneId !== baseSnapshot.laneId)
+            window.Roadbook.app.resizeLaneBody(proposed.laneId);
+        }
+      });
+
+      // 3. Fire API call; reconcile when it responds.
+      window.RoadbookAPI.createProposal(roadmapId, {
+        kind: "update-item",
+        target_id: item.id,
+        payload: proposed,
+        base_snapshot: baseSnapshot,
+        note: null
+      }).then((result) => {
+        if (result.error) {
+          // Roll back the optimistic update
+          removeProposal(tempId);
+          paintProposalGhosts();
+          toast(result.error, true);
+        } else {
+          replaceOptimistic(tempId, result.row);
+          const label = kind === "move" ? "Move suggested"
+            : kind === "resize-end" ? "Resize suggested"
+            : kind === "resize-start" ? "Resize suggested"
+            : "Change suggested";
+          toast(label);
+        }
+      }).catch((e) => {
+        console.error("createProposal failed", e);
+        removeProposal(tempId);
+        paintProposalGhosts();
+        toast("Could not send proposal", true);
+      });
+
+      return false; // block the engine's commit
+    });
   }
 
   // Two distinct rendering modes:
