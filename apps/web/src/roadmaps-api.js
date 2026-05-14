@@ -305,13 +305,36 @@
     return data || [];
   }
 
-  // Creates a new proposal. Returns { ok, row, error }.
+  // Creates or updates a proposal. Coalesces: at most one pending proposal
+  // per (roadmap, kind, target, author). Re-proposing on the same item
+  // updates the existing row's payload/base_snapshot in place.
   async function createProposal(roadmapId, { kind, target_id, payload, base_snapshot, note }) {
     if (isLocal()) return { error: "Proposals require Supabase." };
     const client = sb();
     if (!client) return { error: "Not signed in." };
     const user = await window.RoadbookAuth.getUser();
     if (!user) return { error: "Not signed in." };
+    // Try UPDATE first (matches the partial unique index on pending proposals)
+    const { data: existing } = await client
+      .from("roadmap_proposals")
+      .select("id")
+      .eq("roadmap_id", roadmapId)
+      .eq("kind", kind)
+      .eq("status", "pending")
+      .eq("author_id", user.id)
+      .eq("target_id", target_id || null)
+      .maybeSingle();
+    if (existing && existing.id) {
+      const { data: updated, error } = await client
+        .from("roadmap_proposals")
+        .update({ payload, base_snapshot: base_snapshot || null, note: note || null, created_at: new Date().toISOString() })
+        .eq("id", existing.id)
+        .select("id, kind, target_id, author_id, payload, base_snapshot, note, status, decided_at, decided_by, decided_reason, created_at")
+        .single();
+      if (error) { console.error(error); return { error: error.message }; }
+      return { ok: true, row: updated, updated: true };
+    }
+    // No existing pending — insert new
     const row = {
       roadmap_id: roadmapId,
       kind,
@@ -327,7 +350,7 @@
       .select("id, kind, target_id, author_id, payload, base_snapshot, note, status, decided_at, decided_by, decided_reason, created_at")
       .single();
     if (error) { console.error(error); return { error: error.message }; }
-    return { ok: true, row: data };
+    return { ok: true, row: data, updated: false };
   }
 
   // Owner accepts or rejects. status must be "accepted" or "rejected".

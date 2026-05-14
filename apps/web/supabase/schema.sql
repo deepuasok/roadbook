@@ -167,6 +167,14 @@ create table if not exists public.roadmap_proposals (
 
 create index if not exists idx_proposals_roadmap_status on public.roadmap_proposals (roadmap_id, status);
 
+-- Coalesce: at most one pending proposal per (roadmap, kind, target, author).
+-- Re-proposing the same change on the same item updates the existing row
+-- via UPSERT instead of inserting a new one. Only enforced for status=pending;
+-- once decided, the constraint relaxes so a follow-up proposal is allowed.
+create unique index if not exists idx_proposals_one_pending_per_author
+  on public.roadmap_proposals (roadmap_id, kind, target_id, author_id)
+  where status = 'pending';
+
 -- ----- Auto-claim invitations -----
 -- Single function used by both triggers below. Looks up any pending
 -- invitations for the given email, materializes them as collaborator rows,

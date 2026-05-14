@@ -315,13 +315,23 @@
   }
 
   // ============================================================
-  //  PROPOSAL GHOSTS (Cut B — update-item moves and resizes)
+  //  PROPOSALS (modal-driven flow + owner review panel)
   // ============================================================
-  // Render every pending update-item proposal as a dotted ghost card in
-  // the proposed lane body. Owners see all proposals; collaborators only
-  // see their own (which is also enforced by RLS).
+  // Cut B v2: collaborators don't drag-to-propose. They click a tile and
+  // use the same edit modal as the owner. Their Save button is labeled
+  // "Propose changes" and intercepted at capture phase to build a
+  // proposal payload from the form values instead of committing.
+  //
+  // Owners get a dedicated "Pending" button in the shell that opens a
+  // side panel listing every pending proposal with Approve/Reject.
+  // Items with pending proposals get a small badge inline.
+  //
+  // Proposals coalesce server-side via a partial unique index on
+  // (roadmap, kind, target, author) where status=pending — re-proposing
+  // updates the existing row instead of duplicating.
   let pendingProposals = [];
   let openPopover = null;
+  let modalEditingId = null;
 
   function closePopover() {
     if (openPopover) {
@@ -330,32 +340,297 @@
     }
   }
 
+  function pendingForItemByAuthor(itemId, authorId) {
+    return pendingProposals.find(
+      (p) => p.kind === "update-item" && p.target_id === itemId && p.author_id === authorId
+    );
+  }
+
   async function refreshProposals() {
-    const fresh = await window.RoadbookAPI.listProposals(roadmapId, "pending");
-    // Preserve any optimistic local entries that don't yet have a real id
-    const optimistic = pendingProposals.filter((p) => p._optimistic);
-    pendingProposals = [...fresh, ...optimistic];
-    paintProposalGhosts();
+    pendingProposals = await window.RoadbookAPI.listProposals(roadmapId, "pending");
+    paintPendingBadges();
+    if (isOwner) renderPendingPanelContent();
   }
 
-  // Add an optimistic local proposal so the UI reflects the change instantly,
-  // before the API roundtrip. Returns the temporary id.
-  function addOptimisticProposal(p) {
-    const tempId = "tmp-" + Math.random().toString(36).slice(2, 10);
-    pendingProposals.push({ ...p, id: tempId, status: "pending", _optimistic: true });
-    return tempId;
-  }
-  function replaceOptimistic(tempId, realRow) {
-    pendingProposals = pendingProposals.map((p) => p.id === tempId ? { ...realRow, _optimistic: false } : p);
-  }
-  function removeProposal(id) {
-    pendingProposals = pendingProposals.filter((p) => p.id !== id);
+  // ----- Item-level "Pending" badge -----
+  // Owner and collaborator both see it. Shows there's an unresolved
+  // proposal on this item without revealing the proposed delta inline.
+  function paintPendingBadges() {
+    document.querySelectorAll(".pending-badge").forEach((b) => b.remove());
+    const counts = {};
+    for (const p of pendingProposals) {
+      if (p.kind !== "update-item" || !p.target_id) continue;
+      counts[p.target_id] = (counts[p.target_id] || 0) + 1;
+    }
+    for (const itemId of Object.keys(counts)) {
+      const card = document.querySelector(`.card[data-id="${itemId}"]`);
+      if (!card) continue;
+      const badge = document.createElement("div");
+      badge.className = "pending-badge";
+      badge.textContent = counts[itemId] > 1 ? `${counts[itemId]} pending` : "Pending";
+      badge.title = `${counts[itemId]} pending change${counts[itemId] > 1 ? "s" : ""}`;
+      card.appendChild(badge);
+    }
   }
 
-  // ----- Drag intent handler (collaborator only) -----
-  // Capture drag/resize drops as proposals AND optimistically apply them
-  // visually so the collaborator sees the card at the new position right
-  // away — no flicker waiting for the API roundtrip.
+  // ----- Modal interception (collaborator's Save becomes Propose) -----
+  // Wrap window.Roadbook.modal.open so we know what item is being edited
+  // and can customize the modal for collaborators (button label, hide
+  // delete, pre-fill with pending proposal values).
+  const originalModalOpen = window.Roadbook?.modal?.open;
+  if (originalModalOpen) {
+    window.Roadbook.modal.open = function (itemId) {
+      modalEditingId = itemId;
+      originalModalOpen.call(window.Roadbook.modal, itemId);
+      // Defer customization so the engine's open() has finished setting form values
+      Promise.resolve().then(() => customizeEditModal(itemId));
+    };
+  }
+
+  function customizeEditModal(itemId) {
+    const saveBtn = document.getElementById("mSave");
+    const deleteBtn = document.getElementById("mDelete");
+    if (!saveBtn) return;
+    if (!isOwner) {
+      // Collaborator: relabel save, hide delete
+      saveBtn.textContent = "Propose changes";
+      saveBtn.classList.add("propose-btn");
+      if (deleteBtn) deleteBtn.style.display = "none";
+      // If a pending proposal exists, pre-fill dates with proposed values
+      const existing = pendingForItemByAuthor(itemId, currentUser.id);
+      if (existing) {
+        const p = existing.payload || {};
+        if (p.startDate) document.getElementById("fStartDate").value = p.startDate;
+        if (p.endDate) document.getElementById("fEndDate").value = p.endDate;
+        if (p.title) document.getElementById("fTitle").value = p.title;
+        if (typeof p.complete === "number") {
+          const compInput = document.getElementById("fComplete");
+          if (compInput) {
+            compInput.value = p.complete;
+            const valLabel = document.getElementById("fCompleteVal");
+            if (valLabel) valLabel.textContent = p.complete + "%";
+          }
+        }
+      }
+    } else {
+      // Owner: ensure label is back to default (in case button was hijacked)
+      saveBtn.textContent = "Save";
+      saveBtn.classList.remove("propose-btn");
+      if (deleteBtn) deleteBtn.style.display = "";
+    }
+  }
+
+  // Capture-phase click handler on the Save button. For collaborators we
+  // build a proposal from the form values and upsert it; for owners we
+  // step out and let the engine's bubble-phase handler do its thing.
+  const mSaveBtn = document.getElementById("mSave");
+  if (mSaveBtn) {
+    mSaveBtn.addEventListener("click", async (e) => {
+      if (isOwner) return; // let engine.save() handle it
+      if (!modalEditingId) return;
+      const item = window.Roadbook.state.findItem(modalEditingId);
+      if (!item) return;
+      // Stop the engine's save() from also running
+      e.stopImmediatePropagation();
+      e.preventDefault();
+
+      const form = readModalForm(item);
+      const changed = Object.keys(form).some((k) => form[k] !== item[k]);
+      if (!changed) {
+        if (window.Roadbook?.modal?.close) window.Roadbook.modal.close();
+        modalEditingId = null;
+        toast("No changes to propose");
+        return;
+      }
+
+      const baseSnapshot = {
+        title: item.title,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        laneId: item.laneId,
+        row: item.row,
+        status: item.status,
+        type: item.type,
+        complete: item.complete
+      };
+      const proposed = { ...baseSnapshot, ...form };
+
+      // Lock the button while saving
+      mSaveBtn.disabled = true;
+      const result = await window.RoadbookAPI.createProposal(roadmapId, {
+        kind: "update-item",
+        target_id: item.id,
+        payload: proposed,
+        base_snapshot: baseSnapshot,
+        note: null
+      });
+      mSaveBtn.disabled = false;
+
+      if (result.error) { toast(result.error, true); return; }
+      toast(result.updated ? "Proposal updated" : "Proposal sent");
+      if (window.Roadbook?.modal?.close) window.Roadbook.modal.close();
+      modalEditingId = null;
+      refreshProposals();
+    }, true /* capture phase — runs before engine handler */);
+  }
+
+  // Read the engine modal form into the same shape as an item record
+  function readModalForm(item) {
+    const dates = window.Roadbook?.dates;
+    let startDate = document.getElementById("fStartDate")?.value || item.startDate;
+    let endDate = document.getElementById("fEndDate")?.value || item.endDate;
+    if (dates && dates.diffDays(startDate, endDate) < 0) endDate = startDate;
+    return {
+      title: (document.getElementById("fTitle")?.value || item.title).trim(),
+      startDate,
+      endDate,
+      status: getChipGroupValue("fStatusGroup", item.status),
+      type: getChipGroupValue("fTypeGroup", item.type),
+      complete: parseInt(document.getElementById("fComplete")?.value, 10) || 0
+    };
+  }
+
+  function getChipGroupValue(groupId, fallback) {
+    const sel = document.querySelector(`#${groupId} .chip[aria-checked="true"]`);
+    if (sel && sel.dataset.value) return sel.dataset.value;
+    const sel2 = document.querySelector(`#${groupId} .chip.selected`);
+    if (sel2 && sel2.dataset.value) return sel2.dataset.value;
+    return fallback;
+  }
+
+  // ----- Owner: Pending Proposals side panel -----
+  // Adds a "Pending (N)" button to the editor shell that toggles a side
+  // panel listing every pending proposal with Approve/Reject.
+  let pendingPanel = null;
+  let pendingBtn = null;
+
+  if (isOwner) {
+    pendingBtn = document.createElement("button");
+    pendingBtn.className = "shell-btn pending-shell-btn";
+    pendingBtn.type = "button";
+    pendingBtn.id = "pendingProposalsBtn";
+    pendingBtn.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10M3 8h10M3 12h6"/></svg><span>Pending</span><span class="pending-count" id="pendingCount">0</span>';
+    const inviteBtnEl = document.getElementById("inviteBtn");
+    if (inviteBtnEl && inviteBtnEl.parentElement) {
+      inviteBtnEl.parentElement.insertBefore(pendingBtn, inviteBtnEl);
+    }
+
+    pendingPanel = document.createElement("div");
+    pendingPanel.id = "pendingPanel";
+    pendingPanel.className = "pending-panel";
+    pendingPanel.setAttribute("aria-hidden", "true");
+    pendingPanel.innerHTML = `
+      <div class="comments-head">
+        <div class="comments-title">Pending proposals</div>
+        <button class="comments-close" id="pendingClose" type="button" aria-label="Close">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </div>
+      <div class="pending-list" id="pendingList"></div>
+    `;
+    document.body.appendChild(pendingPanel);
+
+    pendingBtn.addEventListener("click", openPendingPanel);
+    document.getElementById("pendingClose").addEventListener("click", closePendingPanel);
+  }
+
+  function openPendingPanel() {
+    if (!pendingPanel) return;
+    pendingPanel.classList.add("open");
+    pendingPanel.setAttribute("aria-hidden", "false");
+    renderPendingPanelContent();
+  }
+  function closePendingPanel() {
+    if (!pendingPanel) return;
+    pendingPanel.classList.remove("open");
+    pendingPanel.setAttribute("aria-hidden", "true");
+  }
+
+  function renderPendingPanelContent() {
+    const updateProposals = pendingProposals.filter((p) => p.kind === "update-item");
+    const countEl = document.getElementById("pendingCount");
+    if (countEl) countEl.textContent = updateProposals.length;
+    if (pendingBtn) {
+      pendingBtn.classList.toggle("empty", updateProposals.length === 0);
+      pendingBtn.classList.toggle("has-pending", updateProposals.length > 0);
+    }
+
+    const listEl = document.getElementById("pendingList");
+    if (!listEl) return;
+    if (updateProposals.length === 0) {
+      listEl.innerHTML = '<div class="comments-empty">No pending proposals.</div>';
+      return;
+    }
+    listEl.innerHTML = "";
+    for (const p of updateProposals) {
+      const item = window.Roadbook?.state?.findItem?.(p.target_id);
+      if (!item) continue;
+      const row = document.createElement("div");
+      row.className = "pending-row";
+      row.innerHTML = `
+        <div class="pending-row-head">
+          <span class="ghost-monogram"></span>
+          <span class="pending-row-name"></span>
+          <span class="pending-row-time"></span>
+        </div>
+        <div class="pending-row-item"></div>
+        <div class="pending-row-delta"></div>
+        <div class="pending-row-actions">
+          <button class="ap-reject" type="button">Reject</button>
+          <button class="ap-approve" type="button">Approve</button>
+        </div>
+      `;
+      row.querySelector(".ghost-monogram").textContent = monogramForUser(p.author_id);
+      row.querySelector(".pending-row-name").textContent = nameForUser(p.author_id);
+      row.querySelector(".pending-row-time").textContent = fmtTime(p.created_at);
+      row.querySelector(".pending-row-item").textContent = "On: " + item.title;
+      row.querySelector(".pending-row-delta").textContent = formatDelta(item, p.payload || {});
+      row.querySelector(".ap-approve").addEventListener("click", async () => {
+        // Apply the patch via the engine
+        window.Roadbook.state.commit(() => {
+          const payload = p.payload || {};
+          Object.keys(payload).forEach((k) => {
+            if (k in item) item[k] = payload[k];
+          });
+        });
+        if (window.Roadbook?.app?.fullRender) window.Roadbook.app.fullRender();
+        await window.RoadbookAPI.decideProposal(p.id, "accepted", null);
+        toast("Approved");
+        refreshProposals();
+      });
+      row.querySelector(".ap-reject").addEventListener("click", async () => {
+        await window.RoadbookAPI.decideProposal(p.id, "rejected", null);
+        toast("Rejected");
+        refreshProposals();
+      });
+      listEl.appendChild(row);
+    }
+  }
+
+  function formatDelta(item, payload) {
+    const parts = [];
+    if (payload.title && payload.title !== item.title) parts.push(`Title: "${item.title}" → "${payload.title}"`);
+    if (payload.startDate && payload.startDate !== item.startDate) parts.push(`Start: ${fmtDateShort(item.startDate)} → ${fmtDateShort(payload.startDate)}`);
+    if (payload.endDate && payload.endDate !== item.endDate) parts.push(`End: ${fmtDateShort(item.endDate)} → ${fmtDateShort(payload.endDate)}`);
+    if (payload.status && payload.status !== item.status) parts.push(`Status: ${item.status} → ${payload.status}`);
+    if (payload.type && payload.type !== item.type) parts.push(`Type: ${item.type} → ${payload.type}`);
+    if (typeof payload.complete === "number" && payload.complete !== item.complete) parts.push(`Done: ${item.complete}% → ${payload.complete}%`);
+    return parts.join("\n") || "(no visible field changes)";
+  }
+  // ----- Drag DISABLED for collaborators -----
+  // Cut B v2: collaborators don't propose via drag anymore. They must
+  // open the edit modal to propose changes. To avoid silent confusion,
+  // we register a no-op intent handler that returns false so drag
+  // attempts snap back without doing anything.
+  // (The visual feedback during drag still happens — only the drop is
+  //  blocked. We could fully kill drag by removing the pointerdown
+  //  listeners from cards, but that's invasive on engine code.)
+  if (!isOwner && window.Roadbook?.drag?.setOnDropIntent) {
+    window.Roadbook.drag.setOnDropIntent(() => false);
+  }
+
+  // ----- DEAD CODE: drag-to-propose + ghost rendering + cancel popover -----
+  /* eslint-disable */ if (false) { /*
   if (!isOwner && window.Roadbook?.drag?.setOnDropIntent) {
     window.Roadbook.drag.setOnDropIntent((item, kind, patch) => {
       const baseSnapshot = {
@@ -671,18 +946,8 @@
     });
   }
 
-  // Close popover on outside click (both approval and cancel variants)
-  document.addEventListener("click", (e) => {
-    if (!openPopover) return;
-    if (e.target.closest(".approval-popover")) return;
-    if (e.target.closest(".cancel-popover")) return;
-    if (e.target.closest(".proposal-ghost")) return;
-    if (e.target.closest(".card.pending-mine")) return;
-    closePopover();
-  });
-
-  // Re-paint proposals on engine re-renders (covers fullRender + year switch)
-  // We already have a MutationObserver below for badges; reuse it for ghosts.
+  */ } /* eslint-enable */
+  // ----- end dead code -----
 
   // Kick off initial proposal fetch.
   await refreshProposals();
@@ -726,10 +991,9 @@
     });
   }
 
-  // Observe DOM for engine re-renders (full + incremental). Re-paint badges
-  // AND proposal ghosts. The observer disconnects during paint to avoid an
-  // infinite loop — our own DOM writes would otherwise re-trigger it
-  // immediately, freezing the page.
+  // Observe DOM for engine re-renders (full + incremental). Re-paint
+  // comment badges AND pending-proposal badges. The observer disconnects
+  // during paint to avoid an infinite loop.
   const stageRoot = document.getElementById("lanes") || document.querySelector(".page") || document.body;
   let repaintTimer = null;
   function scheduleRepaint() {
@@ -739,7 +1003,7 @@
       try {
         mo.disconnect();
         paintBadges();
-        paintProposalGhosts();
+        paintPendingBadges();
       } finally {
         // Re-attach after this microtask so our own mutations don't refire it
         Promise.resolve().then(() => mo.observe(stageRoot, { childList: true, subtree: true }));
@@ -752,26 +1016,9 @@
   // Kick off initial badge fetch.
   await refreshBadges();
 
-  // ============================================================
-  //  CLICK-OVERRIDE for collaborators
-  // ============================================================
-  // For collaborators clicking a tile:
-  //   - If the tile is one of THEIR pending-mine cards → cancel popover
-  //   - Otherwise → comments panel (instead of the engine edit modal)
-  // Owners get the engine edit modal as usual; ghost click → approval popover.
-  if (!isOwner && window.Roadbook?.modal?.open) {
-    const originalOpen = window.Roadbook.modal.open.bind(window.Roadbook.modal);
-    window.Roadbook.modal.open = function (itemId) {
-      const card = document.querySelector(`.card[data-id="${itemId}"]`);
-      if (card && card.classList.contains("pending-mine")) {
-        const proposalId = card.dataset.proposalId;
-        const proposal = pendingProposals.find((p) => p.id === proposalId);
-        if (proposal) { openCancelPopover(proposal, card); return; }
-      }
-      openCommentsPanel(itemId);
-    };
-    window.Roadbook.modal._originalOpen = originalOpen;
-  }
+  // (Tile clicks now go to the engine's edit modal for both roles. The
+  // collaborator's Save button is intercepted above to become Propose.
+  // Comments stay accessible via the comment-count badge on each tile.)
 
   // Expose a manual opener so the engine or future code can invoke comments.
   window.RoadbookCollab.openComments = openCommentsPanel;
