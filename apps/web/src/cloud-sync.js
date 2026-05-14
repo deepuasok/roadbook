@@ -87,9 +87,35 @@
   }
   // Re-render with the loaded data
   window.Roadbook.app.fullRender();
-  setSaveStatus("saved", "Saved");
 
-  // ----- Debounced sync to Supabase on any state change -----
+  // ----- Role detection (Cut A) -----
+  // If the signed-in user is the roadmap owner, behavior is unchanged.
+  // If they're a collaborator, gate every mutation and skip the autosave
+  // hook entirely (RLS would reject the UPDATE anyway).
+  const isOwner = row.user_id === user.id;
+  const role = isOwner ? "owner" : "collaborator";
+
+  // Expose context for collaboration.js (share modal, comments panel) and
+  // for any future UI code that needs to branch on role.
+  window.RoadbookCollab = {
+    roadmapId,
+    role,
+    isOwner,
+    isCollaborator: !isOwner,
+    ownerId: row.user_id,
+    currentUser: user
+  };
+
+  if (!isOwner) {
+    // Block all engine mutations for collaborators in Cut A. Cut B/C will
+    // capture intents as proposals via a richer hook.
+    window.Roadbook.state.setCanCommit(() => false);
+    setSaveStatus("readonly", "Read-only");
+  } else {
+    setSaveStatus("saved", "Saved");
+  }
+
+  // ----- Debounced sync to Supabase on any state change (owner only) -----
   const DEBOUNCE_MS = 800;
   let pending = null;
   let inflight = false;
@@ -123,17 +149,18 @@
     }
   }
 
-  // Flush on page unload (best-effort)
-  window.addEventListener("beforeunload", () => { if (dirty && !inflight) flush(); });
-
-  window.Roadbook.state.setOnPersist(schedule);
+  if (isOwner) {
+    // Flush on page unload (best-effort) — owner only
+    window.addEventListener("beforeunload", () => { if (dirty && !inflight) flush(); });
+    window.Roadbook.state.setOnPersist(schedule);
+  }
 
   // ----- Save indicator helpers -----
   function setSaveStatus(kind, label) {
     const pill = document.getElementById("savePill");
     const text = document.getElementById("savePillLabel");
     if (!pill || !text) return;
-    pill.classList.remove("saving", "saved", "dirty", "error", "loading");
+    pill.classList.remove("saving", "saved", "dirty", "error", "loading", "readonly");
     pill.classList.add(kind);
     text.textContent = label;
   }

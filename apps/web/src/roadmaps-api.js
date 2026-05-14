@@ -109,5 +109,187 @@
     return true;
   }
 
-  window.RoadbookAPI = { list, get, create, update, remove };
+  // ---------- Shared-with-me (collaborator-side dashboard) ----------
+  async function listSharedWithMe() {
+    if (isLocal()) return [];  // local mode has no collaborators
+    const client = sb();
+    if (!client) return [];
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return [];
+    // Fetch collaborator rows then resolve the roadmaps. RLS allows seeing
+    // roadmaps the user is a collaborator on via the policy added in Cut A.
+    const { data: collabs, error: ce } = await client
+      .from("roadmap_collaborators")
+      .select("roadmap_id, invited_at")
+      .eq("user_id", user.id);
+    if (ce) { console.error(ce); return []; }
+    if (!collabs || collabs.length === 0) return [];
+    const ids = collabs.map((c) => c.roadmap_id);
+    const { data: rows, error: re } = await client
+      .from("roadmaps")
+      .select("id, title, data, user_id, created_at, updated_at")
+      .in("id", ids)
+      .order("updated_at", { ascending: false });
+    if (re) { console.error(re); return []; }
+    return rows || [];
+  }
+
+  // ---------- Collaborators ----------
+  async function listCollaborators(roadmapId) {
+    if (isLocal()) return [];
+    const client = sb();
+    if (!client) return [];
+    const { data, error } = await client
+      .from("roadmap_collaborators")
+      .select("id, user_id, invited_by, invited_at")
+      .eq("roadmap_id", roadmapId)
+      .order("invited_at", { ascending: true });
+    if (error) { console.error(error); return []; }
+    return data || [];
+  }
+
+  async function listInvitations(roadmapId) {
+    if (isLocal()) return [];
+    const client = sb();
+    if (!client) return [];
+    const { data, error } = await client
+      .from("roadmap_invitations")
+      .select("id, invitee_email, invited_at")
+      .eq("roadmap_id", roadmapId)
+      .order("invited_at", { ascending: true });
+    if (error) { console.error(error); return []; }
+    return data || [];
+  }
+
+  // Owner inserts an invitation; the trigger immediately materializes it as a
+  // collaborator row if a matching user already exists, otherwise it waits.
+  async function inviteCollaborator(roadmapId, email) {
+    if (isLocal()) return { error: "Collaboration requires Supabase configuration." };
+    const client = sb();
+    if (!client) return { error: "Not signed in." };
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return { error: "Not signed in." };
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes("@")) return { error: "Enter a valid email." };
+    const { error } = await client
+      .from("roadmap_invitations")
+      .insert({ roadmap_id: roadmapId, invitee_email: cleanEmail, invited_by: user.id });
+    if (error) {
+      // Unique constraint = already invited (or already a collaborator after trigger)
+      if (error.code === "23505") return { error: "Already invited or collaborating." };
+      console.error(error);
+      return { error: error.message };
+    }
+    return { ok: true };
+  }
+
+  async function removeCollaborator(collaboratorId) {
+    if (isLocal()) return false;
+    const client = sb();
+    if (!client) return false;
+    const { error } = await client.from("roadmap_collaborators").delete().eq("id", collaboratorId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }
+
+  async function cancelInvitation(invitationId) {
+    if (isLocal()) return false;
+    const client = sb();
+    if (!client) return false;
+    const { error } = await client.from("roadmap_invitations").delete().eq("id", invitationId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }
+
+  // ---------- Comments ----------
+  async function listComments(roadmapId, itemId) {
+    if (isLocal()) return [];
+    const client = sb();
+    if (!client) return [];
+    let q = client
+      .from("roadmap_comments")
+      .select("id, item_id, author_id, body, created_at, resolved_at, resolved_by")
+      .eq("roadmap_id", roadmapId)
+      .order("created_at", { ascending: true });
+    if (itemId) q = q.eq("item_id", itemId);
+    const { data, error } = await q;
+    if (error) { console.error(error); return []; }
+    return data || [];
+  }
+
+  async function addComment(roadmapId, itemId, body) {
+    if (isLocal()) return null;
+    const client = sb();
+    if (!client) return null;
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return null;
+    const cleanBody = String(body || "").trim();
+    if (!cleanBody) return null;
+    const { data, error } = await client
+      .from("roadmap_comments")
+      .insert({ roadmap_id: roadmapId, item_id: itemId, author_id: user.id, body: cleanBody })
+      .select("id, item_id, author_id, body, created_at, resolved_at, resolved_by")
+      .single();
+    if (error) { console.error(error); return null; }
+    return data;
+  }
+
+  async function resolveComment(commentId) {
+    if (isLocal()) return null;
+    const client = sb();
+    if (!client) return null;
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return null;
+    const { data, error } = await client
+      .from("roadmap_comments")
+      .update({ resolved_at: new Date().toISOString(), resolved_by: user.id })
+      .eq("id", commentId)
+      .select("id, item_id, author_id, body, created_at, resolved_at, resolved_by")
+      .single();
+    if (error) { console.error(error); return null; }
+    return data;
+  }
+
+  async function unresolveComment(commentId) {
+    if (isLocal()) return null;
+    const client = sb();
+    if (!client) return null;
+    const { data, error } = await client
+      .from("roadmap_comments")
+      .update({ resolved_at: null, resolved_by: null })
+      .eq("id", commentId)
+      .select("id, item_id, author_id, body, created_at, resolved_at, resolved_by")
+      .single();
+    if (error) { console.error(error); return null; }
+    return data;
+  }
+
+  // ---------- Comment counts per item (for badges) ----------
+  // Returns a map of item_id → { open: number, total: number } so the editor
+  // can paint badges in one fetch instead of N.
+  async function commentCounts(roadmapId) {
+    if (isLocal()) return {};
+    const client = sb();
+    if (!client) return {};
+    const { data, error } = await client
+      .from("roadmap_comments")
+      .select("item_id, resolved_at")
+      .eq("roadmap_id", roadmapId);
+    if (error) { console.error(error); return {}; }
+    const out = {};
+    for (const row of data || []) {
+      const k = row.item_id;
+      out[k] = out[k] || { open: 0, total: 0 };
+      out[k].total += 1;
+      if (!row.resolved_at) out[k].open += 1;
+    }
+    return out;
+  }
+
+  window.RoadbookAPI = {
+    list, get, create, update, remove,
+    listSharedWithMe,
+    listCollaborators, listInvitations, inviteCollaborator, removeCollaborator, cancelInvitation,
+    listComments, addComment, resolveComment, unresolveComment, commentCounts
+  };
 })();

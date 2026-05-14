@@ -1,0 +1,354 @@
+/* collaboration.css — share modal, comments panel, role-aware UI bits.
+   Loaded only by the cloud editor (apps/web). OSS build never sees it. */
+
+/* ----- Save pill: read-only state ----- */
+.save-pill.readonly {
+  background-color: #f4f4f5;
+  color: #71717a;
+}
+.save-pill.readonly .dot { background-color: #a1a1aa; }
+
+/* ----- Shell Share button ----- */
+.shell-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: #18181b;
+  background: white;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.shell-btn:hover { background-color: #fafafa; border-color: #d4d4d8; }
+.shell-btn:active { transform: scale(0.97); }
+.shell-btn svg { width: 14px; height: 14px; color: #52525b; }
+.shell-btn[hidden] { display: none; }
+
+/* ----- Modal overlay (shared by share + future proposal panels) ----- */
+.collab-overlay {
+  position: fixed; inset: 0;
+  background-color: rgba(15, 15, 20, 0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+.collab-overlay.show { display: flex; }
+.collab-overlay[hidden] { display: none !important; }
+
+.collab-card {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.2);
+  width: min(440px, calc(100vw - 32px));
+  padding: 22px;
+  font-family: inherit;
+}
+.collab-card h3 {
+  margin: 0 0 6px 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #18181b;
+}
+.collab-card .sub {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #71717a;
+  margin-bottom: 16px;
+}
+
+.collab-invite-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.collab-invite-row input {
+  flex: 1;
+  padding: 9px 11px;
+  border: 1px solid #e4e4e7;
+  border-radius: 9px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+.collab-invite-row input:focus {
+  border-color: #6366F1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+.collab-error {
+  color: #b91c1c;
+  font-size: 12px;
+  min-height: 16px;
+  margin: 4px 0 8px;
+}
+
+.collab-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #52525b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 14px 0 8px;
+}
+.collab-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e4e4e7;
+  border-radius: 9px;
+  background: #fafafa;
+}
+.collab-row {
+  display: flex;
+  align-items: center;
+  padding: 9px 11px;
+  font-size: 13px;
+  border-bottom: 1px solid #ececef;
+}
+.collab-row:last-child { border-bottom: none; }
+.collab-row .who { flex: 1; color: #18181b; min-width: 0; }
+.collab-row .who small { display: block; color: #a1a1aa; font-size: 11px; margin-top: 2px; }
+.collab-row .status {
+  font-size: 11px;
+  color: #a1a1aa;
+  margin-right: 8px;
+}
+.collab-row .status.pending { color: #b45309; }
+.collab-row button.collab-revoke {
+  background: transparent;
+  border: 1px solid #e4e4e7;
+  color: #71717a;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.collab-row button.collab-revoke:hover { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+.collab-empty {
+  padding: 14px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #a1a1aa;
+}
+
+.collab-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.collab-btn {
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  background: white;
+  color: #18181b;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.collab-btn:hover { background: #fafafa; border-color: #d4d4d8; }
+.collab-btn.primary {
+  background: #18181b;
+  color: white;
+  border-color: #18181b;
+}
+.collab-btn.primary:hover { background: #27272a; }
+.collab-btn:active { transform: scale(0.97); }
+.collab-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ----- Comments panel (slide in from right) ----- */
+.comments-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 100vw);
+  background: white;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.08);
+  border-left: 1px solid #e4e4e7;
+  transform: translateX(100%);
+  transition: transform 220ms ease;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  font-family: inherit;
+}
+.comments-panel.open {
+  transform: translateX(0);
+}
+
+.comments-head {
+  display: flex;
+  align-items: center;
+  padding: 16px 18px;
+  border-bottom: 1px solid #ececef;
+  gap: 10px;
+}
+.comments-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #18181b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comments-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #71717a;
+  border-radius: 6px;
+}
+.comments-close:hover { background: #fafafa; color: #18181b; }
+.comments-close svg { width: 14px; height: 14px; }
+
+.comments-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+}
+.comment {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f4f4f5;
+}
+.comment:last-child { border-bottom: none; padding-bottom: 0; }
+.comment.resolved { opacity: 0.55; }
+.comment-meta {
+  font-size: 11.5px;
+  color: #a1a1aa;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.comment-author { color: #52525b; font-weight: 500; }
+.comment-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #18181b;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.comment-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.comment-actions button {
+  font-size: 11px;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  color: #71717a;
+  cursor: pointer;
+}
+.comment-actions button:hover { color: #18181b; }
+.comments-empty {
+  text-align: center;
+  font-size: 12.5px;
+  color: #a1a1aa;
+  padding: 24px 0;
+}
+
+.comments-compose {
+  border-top: 1px solid #ececef;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.comments-compose textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 9px 11px;
+  border: 1px solid #e4e4e7;
+  border-radius: 9px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  min-height: 50px;
+}
+.comments-compose textarea:focus {
+  border-color: #6366F1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+.comments-compose button { align-self: flex-end; }
+
+/* ----- Comment badge on item tiles ----- */
+.card[data-id] { position: relative; }
+.comment-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: white;
+  border: 1px solid #e4e4e7;
+  color: #52525b;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  z-index: 5;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.comment-badge:hover {
+  border-color: #d4d4d8;
+  background: #fafafa;
+}
+.comment-badge svg { width: 10px; height: 10px; color: #71717a; }
+.comment-badge.has-open {
+  color: #b45309;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+.comment-badge.has-open svg { color: #b45309; }
+
+/* ----- Toast (cheap, ad-hoc) ----- */
+.collab-toast {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: #18181b;
+  color: white;
+  padding: 9px 16px;
+  font-size: 13px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+  z-index: 400;
+}
+.collab-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.collab-toast.error { background: #b91c1c; }
+
+/* ----- "Shared with me" section on dashboard ----- */
+.shared-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #52525b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 32px 0 14px;
+}
+.shared-card .owner-line {
+  font-size: 11px;
+  color: #a1a1aa;
+  margin-top: 4px;
+}

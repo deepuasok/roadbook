@@ -36,15 +36,29 @@ create trigger trg_roadmaps_touch_updated
 -- Row-level security: every user only sees their own roadmaps
 alter table public.roadmaps enable row level security;
 
-drop policy if exists "roadmaps_select_own"  on public.roadmaps;
-drop policy if exists "roadmaps_insert_own"  on public.roadmaps;
-drop policy if exists "roadmaps_update_own"  on public.roadmaps;
-drop policy if exists "roadmaps_delete_own"  on public.roadmaps;
+drop policy if exists "roadmaps_select_own"          on public.roadmaps;
+drop policy if exists "roadmaps_select_collaborator" on public.roadmaps;
+drop policy if exists "roadmaps_insert_own"          on public.roadmaps;
+drop policy if exists "roadmaps_update_own"          on public.roadmaps;
+drop policy if exists "roadmaps_delete_own"          on public.roadmaps;
 
+-- Owner can SELECT their own roadmaps
 create policy "roadmaps_select_own"
   on public.roadmaps for select
   using (auth.uid() = user_id);
 
+-- Collaborators can also SELECT roadmaps they're shared on
+create policy "roadmaps_select_collaborator"
+  on public.roadmaps for select
+  using (
+    exists (
+      select 1 from public.roadmap_collaborators c
+      where c.roadmap_id = roadmaps.id
+        and c.user_id = auth.uid()
+    )
+  );
+
+-- INSERT / UPDATE / DELETE remain owner-only
 create policy "roadmaps_insert_own"
   on public.roadmaps for insert
   with check (auth.uid() = user_id);
@@ -60,3 +74,243 @@ create policy "roadmaps_delete_own"
 -- Index for ordering the dashboard by recency
 create index if not exists idx_roadmaps_user_updated
   on public.roadmaps (user_id, updated_at desc);
+
+-- =====================================================================
+-- COLLABORATION (Cut A: collaborators, invitations, comments, proposals)
+-- =====================================================================
+
+-- Active collaborators on a roadmap. Owner is implicit via roadmaps.user_id.
+create table if not exists public.roadmap_collaborators (
+  id          uuid primary key default gen_random_uuid(),
+  roadmap_id  uuid not null references public.roadmaps(id) on delete cascade,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  invited_by  uuid not null references auth.users(id),
+  invited_at  timestamptz not null default now(),
+  unique (roadmap_id, user_id)
+);
+
+create index if not exists idx_collab_user on public.roadmap_collaborators (user_id);
+create index if not exists idx_collab_roadmap on public.roadmap_collaborators (roadmap_id);
+
+-- Pending email-based invitations. Auto-claimed via trigger when the invitee
+-- signs in (or immediately if they already have an account).
+create table if not exists public.roadmap_invitations (
+  id            uuid primary key default gen_random_uuid(),
+  roadmap_id    uuid not null references public.roadmaps(id) on delete cascade,
+  invitee_email text not null,
+  invited_by    uuid not null references auth.users(id),
+  invited_at    timestamptz not null default now(),
+  unique (roadmap_id, invitee_email)
+);
+
+create index if not exists idx_invite_email on public.roadmap_invitations (lower(invitee_email));
+
+-- Item-scoped comments. item_id is the engine-level id from the roadmap JSON.
+create table if not exists public.roadmap_comments (
+  id          uuid primary key default gen_random_uuid(),
+  roadmap_id  uuid not null references public.roadmaps(id) on delete cascade,
+  item_id     text not null,
+  author_id   uuid not null references auth.users(id),
+  body        text not null,
+  created_at  timestamptz not null default now(),
+  resolved_at timestamptz,
+  resolved_by uuid references auth.users(id)
+);
+
+create index if not exists idx_comments_roadmap_item on public.roadmap_comments (roadmap_id, item_id);
+
+-- Pending proposals from collaborators. Cut A creates the table for forward
+-- compatibility but only Cut B/C populates it. kind discriminates the change.
+create table if not exists public.roadmap_proposals (
+  id             uuid primary key default gen_random_uuid(),
+  roadmap_id     uuid not null references public.roadmaps(id) on delete cascade,
+  kind           text not null check (kind in ('add-item','add-lane','update-item','update-lane')),
+  target_id      text,
+  author_id      uuid not null references auth.users(id),
+  payload        jsonb not null,
+  base_snapshot  jsonb,
+  note           text,
+  status         text not null default 'pending' check (status in ('pending','accepted','rejected')),
+  decided_at     timestamptz,
+  decided_by     uuid references auth.users(id),
+  decided_reason text,
+  created_at     timestamptz not null default now()
+);
+
+create index if not exists idx_proposals_roadmap_status on public.roadmap_proposals (roadmap_id, status);
+
+-- ----- Auto-claim invitations -----
+-- Single function used by both triggers below. Looks up any pending
+-- invitations for the given email, materializes them as collaborator rows,
+-- and deletes the consumed invitations. Idempotent via the unique constraint.
+create or replace function public.migrate_invitations_for_email(p_email text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_user_id uuid;
+begin
+  select id into v_user_id from auth.users where lower(email) = lower(p_email) limit 1;
+  if v_user_id is null then return; end if;
+
+  insert into public.roadmap_collaborators (roadmap_id, user_id, invited_by, invited_at)
+  select i.roadmap_id, v_user_id, i.invited_by, i.invited_at
+  from public.roadmap_invitations i
+  where lower(i.invitee_email) = lower(p_email)
+  on conflict (roadmap_id, user_id) do nothing;
+
+  delete from public.roadmap_invitations where lower(invitee_email) = lower(p_email);
+end;
+$$;
+
+-- Trigger 1: new user signs up → claim any invites waiting for their email.
+create or replace function public.handle_new_user_invitations()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.migrate_invitations_for_email(new.email);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_handle_new_user_invitations on auth.users;
+create trigger trg_handle_new_user_invitations
+  after insert on auth.users
+  for each row execute function public.handle_new_user_invitations();
+
+-- Trigger 2: new invitation inserted → if user already exists, claim immediately.
+create or replace function public.handle_new_invitation()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  perform public.migrate_invitations_for_email(new.invitee_email);
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_handle_new_invitation on public.roadmap_invitations;
+create trigger trg_handle_new_invitation
+  after insert on public.roadmap_invitations
+  for each row execute function public.handle_new_invitation();
+
+-- ----- RLS: roadmap_collaborators -----
+alter table public.roadmap_collaborators enable row level security;
+
+drop policy if exists "collab_select_owner"    on public.roadmap_collaborators;
+drop policy if exists "collab_select_self"     on public.roadmap_collaborators;
+drop policy if exists "collab_insert_owner"    on public.roadmap_collaborators;
+drop policy if exists "collab_delete_owner"    on public.roadmap_collaborators;
+drop policy if exists "collab_delete_self"     on public.roadmap_collaborators;
+
+create policy "collab_select_owner"
+  on public.roadmap_collaborators for select
+  using (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+  );
+
+create policy "collab_select_self"
+  on public.roadmap_collaborators for select
+  using (user_id = auth.uid());
+
+create policy "collab_insert_owner"
+  on public.roadmap_collaborators for insert
+  with check (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+  );
+
+create policy "collab_delete_owner"
+  on public.roadmap_collaborators for delete
+  using (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+  );
+
+create policy "collab_delete_self"
+  on public.roadmap_collaborators for delete
+  using (user_id = auth.uid());
+
+-- ----- RLS: roadmap_invitations -----
+alter table public.roadmap_invitations enable row level security;
+
+drop policy if exists "invite_owner_all" on public.roadmap_invitations;
+
+create policy "invite_owner_all"
+  on public.roadmap_invitations for all
+  using (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+  )
+  with check (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+  );
+
+-- ----- RLS: roadmap_comments -----
+alter table public.roadmap_comments enable row level security;
+
+drop policy if exists "comments_select_participants" on public.roadmap_comments;
+drop policy if exists "comments_insert_participants" on public.roadmap_comments;
+drop policy if exists "comments_update_self_or_owner" on public.roadmap_comments;
+drop policy if exists "comments_delete_self" on public.roadmap_comments;
+
+-- Helper predicate: am I owner or collaborator of this roadmap?
+-- Inlined as a CTE-like check via `exists` since RLS doesn't support functions returning bool directly without security definer.
+
+create policy "comments_select_participants"
+  on public.roadmap_comments for select
+  using (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+    or
+    exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_comments.roadmap_id and c.user_id = auth.uid())
+  );
+
+create policy "comments_insert_participants"
+  on public.roadmap_comments for insert
+  with check (
+    author_id = auth.uid()
+    and (
+      exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+      or
+      exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_comments.roadmap_id and c.user_id = auth.uid())
+    )
+  );
+
+create policy "comments_update_self_or_owner"
+  on public.roadmap_comments for update
+  using (
+    author_id = auth.uid()
+    or exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+  );
+
+create policy "comments_delete_self"
+  on public.roadmap_comments for delete
+  using (author_id = auth.uid());
+
+-- ----- RLS: roadmap_proposals -----
+alter table public.roadmap_proposals enable row level security;
+
+drop policy if exists "proposals_select_participants" on public.roadmap_proposals;
+drop policy if exists "proposals_insert_collaborator" on public.roadmap_proposals;
+drop policy if exists "proposals_update_owner"        on public.roadmap_proposals;
+drop policy if exists "proposals_delete_self_pending" on public.roadmap_proposals;
+
+create policy "proposals_select_participants"
+  on public.roadmap_proposals for select
+  using (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+    or
+    exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_proposals.roadmap_id and c.user_id = auth.uid())
+  );
+
+create policy "proposals_insert_collaborator"
+  on public.roadmap_proposals for insert
+  with check (
+    author_id = auth.uid()
+    and exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_proposals.roadmap_id and c.user_id = auth.uid())
+  );
+
+create policy "proposals_update_owner"
+  on public.roadmap_proposals for update
+  using (
+    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+  );
+
+create policy "proposals_delete_self_pending"
+  on public.roadmap_proposals for delete
+  using (author_id = auth.uid() and status = 'pending');

@@ -56,20 +56,24 @@ writeFileSync(join(DIST, "templates.js"), templatesJs);
 // Cloud shell + editor wrapper
 const shellCss = read(join(WEB, "src", "shell.css"));
 const editorShellCss = read(join(WEB, "src", "editor-shell.css"));
+const collabCss = read(join(WEB, "src", "collaboration.css"));
 const supabaseClient = read(join(WEB, "src", "supabase-client.js"));
 const roadmapsApi = read(join(WEB, "src", "roadmaps-api.js"));
 const cloudSync = read(join(WEB, "src", "cloud-sync.js"));
+const collaboration = read(join(WEB, "src", "collaboration.js"));
 const editorTemplate = read(join(WEB, "src", "editor.template.html"));
 
 const editorHtml = editorTemplate
   .replace("/* INJECT:ENGINE_CSS */", engineCss)
   .replace("/* INJECT:EDITOR_SHELL_CSS */", editorShellCss)
+  .replace("/* INJECT:COLLAB_CSS */", collabCss)
   .replace("<!-- INJECT:ENGINE_BODY -->", engineBody)
   .replace("/* INJECT:TEMPLATES */", templatesJs)
   .replace("/* INJECT:ENGINE_JS */", engineJs)
   .replace("/* INJECT:SUPABASE_CLIENT */", supabaseClient)
   .replace("/* INJECT:ROADMAPS_API */", roadmapsApi)
-  .replace("/* INJECT:CLOUD_SYNC */", cloudSync);
+  .replace("/* INJECT:CLOUD_SYNC */", cloudSync)
+  .replace("/* INJECT:COLLABORATION */", collaboration);
 
 writeFileSync(join(DIST, "editor.html"), editorHtml);
 

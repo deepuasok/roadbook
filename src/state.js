@@ -46,8 +46,13 @@
   // manages persistence externally, e.g. Supabase). Default keeps OSS behavior.
   let storageMode = "local";
   let onPersistCallback = null;
+  // Mutation gate: when set, called before every commit. Returning false
+  // blocks the commit (used by the cloud build to put collaborators into a
+  // read-only / propose-only mode). Null-default keeps OSS behavior identical.
+  let canCommitFn = null;
   function setStorageMode(mode) { storageMode = mode === "memory" ? "memory" : "local"; }
   function setOnPersist(cb) { onPersistCallback = typeof cb === "function" ? cb : null; }
+  function setCanCommit(fn) { canCommitFn = typeof fn === "function" ? fn : null; }
 
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
@@ -313,15 +318,19 @@
 
   // commit(mutator) — wraps mutation in snapshot + persist
   function commit(mutator) {
+    if (canCommitFn && canCommitFn() === false) return false;
     mutator();
     persist();
     snapshot();
+    return true;
   }
 
   // commitSilent — mutates + persists but does not push history (used for live drag)
   function commitSilent(mutator) {
+    if (canCommitFn && canCommitFn() === false) return false;
     mutator();
     persist();
+    return true;
   }
 
   function setActiveYear(year) {
@@ -388,6 +397,7 @@
     SNAP_DAYS,
     setStorageMode,
     setOnPersist,
+    setCanCommit,
     load,
     persist,
     snapshot,

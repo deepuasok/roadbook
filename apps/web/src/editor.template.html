@@ -16,6 +16,9 @@
 <script>
 /* INJECT:ROADMAPS_API */
 </script>
+<style>
+/* INJECT:COLLAB_CSS */
+</style>
 </head>
 <body data-theme="light" class="cloud-mode">
 <script>window.__suppressFirstRun = true;</script>
@@ -35,11 +38,53 @@
   </div>
   <div class="right">
     <span class="save-pill" id="savePill"><span class="dot"></span><span id="savePillLabel">Loading…</span></span>
+    <button class="shell-btn" id="shareBtn" hidden type="button" title="Share roadmap">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="3.5" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="12.5" r="2"/><path d="M5.7 7l4.6-2.5M5.7 9l4.6 2.5"/></svg>
+      <span>Share</span>
+    </button>
     <div class="avatar" id="shellAvatar"></div>
   </div>
 </div>
 
 <!-- INJECT:ENGINE_BODY -->
+
+<!-- ===== Share modal (owner only) ===== -->
+<div class="collab-overlay" id="shareOverlay" role="dialog" aria-modal="true" hidden>
+  <div class="collab-card">
+    <h3>Share roadmap</h3>
+    <div class="sub">Invite people by email. They sign in with Google, comment on items, and (soon) propose changes. You stay the owner.</div>
+
+    <div class="collab-invite-row">
+      <input type="email" id="inviteEmail" placeholder="name@example.com" autocomplete="off">
+      <button class="collab-btn primary" id="inviteSend" type="button">Invite</button>
+    </div>
+    <div class="collab-error" id="inviteError"></div>
+
+    <div class="collab-section-title">People with access</div>
+    <div class="collab-list" id="collabList">
+      <div class="collab-empty">Loading…</div>
+    </div>
+
+    <div class="collab-actions">
+      <button class="collab-btn" id="shareClose" type="button">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Comments panel (slides in from right) ===== -->
+<div class="comments-panel" id="commentsPanel" aria-hidden="true">
+  <div class="comments-head">
+    <div class="comments-title" id="commentsTitle">Comments</div>
+    <button class="comments-close" id="commentsClose" type="button" aria-label="Close">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="comments-list" id="commentsList"></div>
+  <div class="comments-compose">
+    <textarea id="commentInput" rows="2" placeholder="Add a comment…"></textarea>
+    <button class="collab-btn primary" id="commentSend" type="button">Comment</button>
+  </div>
+</div>
 
 <script>
 /* INJECT:TEMPLATES */
@@ -49,6 +94,9 @@
 </script>
 <script>
 /* INJECT:CLOUD_SYNC */
+</script>
+<script>
+/* INJECT:COLLABORATION */
 </script>
 </body>
 </html>
