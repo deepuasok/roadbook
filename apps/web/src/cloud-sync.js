@@ -110,10 +110,46 @@
   document.dispatchEvent(new CustomEvent("roadbook:collab-ready", { detail: window.RoadbookCollab }));
 
   if (!isOwner) {
-    // Block all engine mutations for collaborators in Cut A. Cut B/C will
-    // capture intents as proposals via a richer hook.
+    // Collaborators: block any mutation that goes through state.commit
+    // directly (modal saves, title edits, year changes, etc.). Drag and
+    // resize actions are intercepted earlier by setOnDropIntent below and
+    // turned into proposals; they never reach state.commit at all.
     window.Roadbook.state.setCanCommit(() => false);
-    setSaveStatus("readonly", "Read-only");
+    setSaveStatus("readonly", "Read-only · changes go to owner");
+
+    // Register the drag-intent handler. Returns false so drag.js skips the
+    // commit and the card visually snaps back to its current real position.
+    window.Roadbook.drag.setOnDropIntent(async (item, kind, patch) => {
+      const baseSnapshot = {
+        startDate: item.startDate,
+        endDate: item.endDate,
+        laneId: item.laneId,
+        row: item.row
+      };
+      // Build proposed-state from base + patch (so payload is always the
+      // full final state, easy for owner-side ghost rendering)
+      const proposed = { ...baseSnapshot, ...patch };
+      try {
+        const result = await window.RoadbookAPI.createProposal(roadmapId, {
+          kind: "update-item",
+          target_id: item.id,
+          payload: proposed,
+          base_snapshot: baseSnapshot,
+          note: null
+        });
+        if (result.error) {
+          if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast(result.error, true);
+        } else {
+          if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast(kind === "move" ? "Move suggested" : "Resize suggested");
+          // Refresh proposal ghosts so the proposer sees their own pending change
+          if (window.RoadbookCollab?.refreshProposals) window.RoadbookCollab.refreshProposals();
+        }
+      } catch (e) {
+        console.error("createProposal failed", e);
+        if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast("Could not send proposal", true);
+      }
+      return false; // block the local commit; card snaps back
+    });
   } else {
     setSaveStatus("saved", "Saved");
   }

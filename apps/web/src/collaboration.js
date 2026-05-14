@@ -76,6 +76,41 @@
     return "User " + shortId(userId);
   }
 
+  // 2-letter monogram for a user. Uses real name when we have it (current
+  // user), falls back to deterministic UUID prefix otherwise.
+  function monogramForUser(userId) {
+    if (!userId) return "??";
+    if (currentUser && userId === currentUser.id) {
+      const name = currentUser.user_metadata?.full_name || currentUser.email || "Me";
+      const parts = String(name).trim().split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return (parts[0] || "M").slice(0, 2).toUpperCase();
+    }
+    return userId.replace(/-/g, "").slice(0, 2).toUpperCase();
+  }
+
+  // Date helpers for ghost positioning. The engine uses CSS custom
+  // properties --start-day / --span-days / --row + the lane-body's
+  // --total-days. We just compute the same.
+  function dayOfYear(iso) {
+    if (!iso) return 1;
+    return window.Roadbook?.dates?.dayOfYear ? window.Roadbook.dates.dayOfYear(iso) : 1;
+  }
+  function yearFromIso(iso) { return (iso || "").slice(0, 4); }
+  function activeYearStr() {
+    return window.Roadbook?.state?.get?.()?.activeYear || "2026";
+  }
+  function totalDaysForYear(yearStr) {
+    const y = parseInt(yearStr, 10);
+    return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365;
+  }
+  function fmtDateShort(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
   // ============================================================
   //  SHARE MODAL (owner-only)
   // ============================================================
@@ -280,6 +315,191 @@
   }
 
   // ============================================================
+  //  PROPOSAL GHOSTS (Cut B — update-item moves and resizes)
+  // ============================================================
+  // Render every pending update-item proposal as a dotted ghost card in
+  // the proposed lane body. Owners see all proposals; collaborators only
+  // see their own (which is also enforced by RLS).
+  let pendingProposals = [];
+  let openPopover = null;
+
+  function closePopover() {
+    if (openPopover) {
+      openPopover.remove();
+      openPopover = null;
+    }
+  }
+
+  async function refreshProposals() {
+    pendingProposals = await window.RoadbookAPI.listProposals(roadmapId, "pending");
+    paintProposalGhosts();
+  }
+
+  function paintProposalGhosts() {
+    document.querySelectorAll(".proposal-ghost").forEach((g) => g.remove());
+    const activeYear = activeYearStr();
+    const totalDays = totalDaysForYear(activeYear);
+
+    for (const p of pendingProposals) {
+      if (p.kind !== "update-item") continue;  // Cut B only handles move/resize
+      const payload = p.payload || {};
+      if (!payload.startDate || !payload.endDate || !payload.laneId) continue;
+      // Skip proposals for a different year
+      if (yearFromIso(payload.startDate) !== activeYear) continue;
+
+      const body = document.querySelector(`.lane-body[data-lane="${payload.laneId}"]`);
+      if (!body) continue;
+
+      const startDay = dayOfYear(payload.startDate);
+      const endDay = dayOfYear(payload.endDate);
+      const spanDays = Math.max(1, endDay - startDay + 1);
+      const row = payload.row || 0;
+
+      // The engine sets --total-days on the page root via inline style;
+      // we replicate locally for safety.
+      const ghost = document.createElement("div");
+      ghost.className = "proposal-ghost";
+      if (p.author_id === currentUser.id) ghost.classList.add("mine");
+      ghost.style.setProperty("--start-day", startDay);
+      ghost.style.setProperty("--span-days", spanDays);
+      ghost.style.setProperty("--row", row);
+      ghost.style.setProperty("--total-days", totalDays);
+      ghost.dataset.proposalId = p.id;
+
+      // Look up the underlying item title for context
+      let title = "Suggested change";
+      try {
+        const it = window.Roadbook?.state?.findItem?.(p.target_id);
+        if (it && it.title) title = it.title;
+      } catch (_) { /* ignore */ }
+
+      ghost.innerHTML = `
+        <span class="ghost-title"></span>
+        <span class="ghost-monogram"></span>
+      `;
+      ghost.querySelector(".ghost-title").textContent = title;
+      ghost.querySelector(".ghost-monogram").textContent = monogramForUser(p.author_id);
+      ghost.title = `Proposal by ${nameForUser(p.author_id)}: ${fmtDateShort(payload.startDate)} - ${fmtDateShort(payload.endDate)}`;
+      ghost.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openApprovalPopover(p, ghost);
+      });
+      body.appendChild(ghost);
+    }
+  }
+
+  function openApprovalPopover(proposal, ghostEl) {
+    closePopover();
+    const payload = proposal.payload || {};
+    const base = proposal.base_snapshot || {};
+    const item = window.Roadbook?.state?.findItem?.(proposal.target_id);
+
+    // Conflict detection: if the current item state differs from base_snapshot,
+    // the owner has already changed it since the proposal was made.
+    let conflict = false;
+    if (item && base) {
+      conflict = (
+        item.startDate !== base.startDate ||
+        item.endDate !== base.endDate ||
+        item.laneId !== base.laneId ||
+        item.row !== base.row
+      );
+    }
+
+    // Build delta description
+    const deltaParts = [];
+    if (item) {
+      if (payload.startDate !== item.startDate)
+        deltaParts.push(`Start: ${fmtDateShort(item.startDate)} → ${fmtDateShort(payload.startDate)}`);
+      if (payload.endDate !== item.endDate)
+        deltaParts.push(`End: ${fmtDateShort(item.endDate)} → ${fmtDateShort(payload.endDate)}`);
+      if (payload.laneId !== item.laneId) {
+        const oldLane = window.Roadbook?.state?.findLane?.(item.laneId)?.name || item.laneId;
+        const newLane = window.Roadbook?.state?.findLane?.(payload.laneId)?.name || payload.laneId;
+        deltaParts.push(`Lane: ${oldLane} → ${newLane}`);
+      }
+    }
+    const deltaText = deltaParts.join("\n") || "No visible changes";
+
+    const pop = document.createElement("div");
+    pop.className = "approval-popover";
+    pop.innerHTML = `
+      <div class="ap-title">
+        <span class="ghost-monogram"></span>
+        <span class="ap-name"></span>
+      </div>
+      <div class="ap-detail">suggests this change to <strong class="ap-item-title"></strong></div>
+      <div class="ap-delta"></div>
+      ${conflict ? '<div class="ap-warning">This item has changed since the proposal was made. Approving will overwrite your edits.</div>' : ''}
+      <div class="ap-actions">
+        <button class="ap-reject" type="button">Reject</button>
+        <button class="ap-approve" type="button">${conflict ? "Approve anyway" : "Approve"}</button>
+      </div>
+    `;
+    pop.querySelector(".ap-name").textContent = nameForUser(proposal.author_id);
+    pop.querySelector(".ghost-monogram").textContent = monogramForUser(proposal.author_id);
+    pop.querySelector(".ap-item-title").textContent = item?.title || proposal.target_id;
+    pop.querySelector(".ap-delta").textContent = deltaText;
+
+    // Position near the ghost
+    document.body.appendChild(pop);
+    const ghostRect = ghostEl.getBoundingClientRect();
+    const popRect = pop.getBoundingClientRect();
+    let top = ghostRect.bottom + 8 + window.scrollY;
+    let left = ghostRect.left + window.scrollX;
+    // Clamp horizontally so it doesn't overflow the viewport
+    const maxLeft = window.innerWidth - popRect.width - 12;
+    if (left > maxLeft) left = maxLeft;
+    if (left < 12) left = 12;
+    // If there's no room below, flip above
+    if (top + popRect.height > window.innerHeight + window.scrollY - 12) {
+      top = ghostRect.top + window.scrollY - popRect.height - 8;
+    }
+    pop.style.top = `${top}px`;
+    pop.style.left = `${left}px`;
+
+    openPopover = pop;
+
+    pop.querySelector(".ap-approve").addEventListener("click", async () => {
+      if (!item) { toast("Item no longer exists", true); pop.remove(); openPopover = null; refreshProposals(); return; }
+      // Apply the patch via the engine's state.commit
+      window.Roadbook.state.commit(() => {
+        if (payload.startDate !== undefined) item.startDate = payload.startDate;
+        if (payload.endDate !== undefined) item.endDate = payload.endDate;
+        if (payload.laneId !== undefined) item.laneId = payload.laneId;
+        if (payload.row !== undefined) item.row = payload.row;
+      });
+      // Re-render the moved card
+      window.Roadbook.app.fullRender();
+      // Mark proposal accepted
+      await window.RoadbookAPI.decideProposal(proposal.id, "accepted", null);
+      toast("Approved");
+      closePopover();
+      refreshProposals();
+    });
+
+    pop.querySelector(".ap-reject").addEventListener("click", async () => {
+      await window.RoadbookAPI.decideProposal(proposal.id, "rejected", null);
+      toast("Rejected");
+      closePopover();
+      refreshProposals();
+    });
+  }
+
+  // Close popover on outside click
+  document.addEventListener("click", (e) => {
+    if (openPopover && !e.target.closest(".approval-popover") && !e.target.closest(".proposal-ghost")) {
+      closePopover();
+    }
+  });
+
+  // Re-paint proposals on engine re-renders (covers fullRender + year switch)
+  // We already have a MutationObserver below for badges; reuse it for ghosts.
+
+  // Kick off initial proposal fetch.
+  await refreshProposals();
+
+  // ============================================================
   //  COMMENT BADGES on item tiles
   // ============================================================
   // The engine renders item cards with data-id=itemId. We paint a small
@@ -318,10 +538,18 @@
     });
   }
 
-  // Observe DOM for engine re-renders (full + incremental).
+  // Observe DOM for engine re-renders (full + incremental). Re-paint badges
+  // AND proposal ghosts since the engine doesn't know about either.
   const stageRoot = document.querySelector("main, .stage, body") || document.body;
+  let repaintTimer = null;
   const mo = new MutationObserver(() => {
-    paintBadges();
+    // Debounce — paintBadges + paintProposalGhosts both query the DOM
+    if (repaintTimer) return;
+    repaintTimer = setTimeout(() => {
+      repaintTimer = null;
+      paintBadges();
+      paintProposalGhosts();
+    }, 16);
   });
   mo.observe(stageRoot, { childList: true, subtree: true });
 
@@ -348,10 +576,13 @@
   window.RoadbookCollab.openComments = openCommentsPanel;
   window.RoadbookCollab.openShare = openShareModal;
   window.RoadbookCollab.refreshBadges = refreshBadges;
+  window.RoadbookCollab.refreshProposals = refreshProposals;
+  window.RoadbookCollab.toast = toast;
 
   // Close panels on Escape
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      if (openPopover) closePopover();
       if (commentsPanel.classList.contains("open")) closeCommentsPanel();
       if (shareOverlay && shareOverlay.classList.contains("show")) closeShareModal();
     }

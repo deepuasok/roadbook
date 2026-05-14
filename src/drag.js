@@ -10,6 +10,19 @@
   const DRAG_THRESHOLD = 4; // px before drag activates (so clicks still register)
 
   let dragState = null;
+  // Drop intent hook — called before state.commit at each commit site
+  // (move, resize-end, resize-start). Receives (item, kind, patch). If the
+  // handler returns false, the commit is skipped and the card snaps back to
+  // its original DOM position. Used by the cloud build to capture a drag as
+  // a proposal when the user is a collaborator. Null-default keeps OSS
+  // behavior identical.
+  let onDropIntentFn = null;
+  function setOnDropIntent(fn) { onDropIntentFn = typeof fn === "function" ? fn : null; }
+  function fireDropIntent(item, kind, patch) {
+    if (!onDropIntentFn) return true;
+    try { return onDropIntentFn(item, kind, patch) !== false; }
+    catch (e) { console.error("[drag] onDropIntent threw:", e); return true; }
+  }
 
   function attachCard(card) {
     card.addEventListener("pointerdown", onPointerDown);
@@ -133,7 +146,9 @@
         const finalEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
         const newEndDate = dates.addDaysIso(yearStart, finalEnd - 1);
         if (newEndDate !== item.endDate) {
-          window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+          if (fireDropIntent(item, "resize-end", { endDate: newEndDate })) {
+            window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+          }
         }
       } else {
         // Snap startDay to nearest 14-day boundary; preserve endDate
@@ -144,7 +159,9 @@
         )) + 1;
         const newStartDate = dates.addDaysIso(yearStart, snappedStartDay - 1);
         if (newStartDate !== item.startDate) {
-          window.Roadbook.state.commit(() => { item.startDate = newStartDate; });
+          if (fireDropIntent(item, "resize-start", { startDate: newStartDate })) {
+            window.Roadbook.state.commit(() => { item.startDate = newStartDate; });
+          }
         }
       }
       window.Roadbook.app.updateCardDom(item);
@@ -267,12 +284,20 @@
           item.laneId !== drop.laneId
         );
         if (changed) {
-          window.Roadbook.state.commit(() => {
-            item.startDate = drop.startDate;
-            item.endDate = drop.endDate;
-            item.row = drop.row;
-            item.laneId = drop.laneId;
-          });
+          const patch = {
+            startDate: drop.startDate,
+            endDate: drop.endDate,
+            row: drop.row,
+            laneId: drop.laneId
+          };
+          if (fireDropIntent(item, "move", patch)) {
+            window.Roadbook.state.commit(() => {
+              item.startDate = patch.startDate;
+              item.endDate = patch.endDate;
+              item.row = patch.row;
+              item.laneId = patch.laneId;
+            });
+          }
         }
         const newCard = window.Roadbook.app.replaceCard(item, oldLane);
         if (newCard) attachCard(newCard);
@@ -306,5 +331,5 @@
   }
 
   window.Roadbook = window.Roadbook || {};
-  window.Roadbook.drag = { attachCard, ROW_H };
+  window.Roadbook.drag = { attachCard, ROW_H, setOnDropIntent };
 })();

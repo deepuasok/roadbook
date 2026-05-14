@@ -289,10 +289,87 @@
     return out;
   }
 
+  // ---------- Proposals (Cut B and beyond) ----------
+  async function listProposals(roadmapId, status) {
+    if (isLocal()) return [];
+    const client = sb();
+    if (!client) return [];
+    let q = client
+      .from("roadmap_proposals")
+      .select("id, kind, target_id, author_id, payload, base_snapshot, note, status, decided_at, decided_by, decided_reason, created_at")
+      .eq("roadmap_id", roadmapId)
+      .order("created_at", { ascending: true });
+    if (status) q = q.eq("status", status);
+    const { data, error } = await q;
+    if (error) { console.error(error); return []; }
+    return data || [];
+  }
+
+  // Creates a new proposal. Returns { ok, row, error }.
+  async function createProposal(roadmapId, { kind, target_id, payload, base_snapshot, note }) {
+    if (isLocal()) return { error: "Proposals require Supabase." };
+    const client = sb();
+    if (!client) return { error: "Not signed in." };
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return { error: "Not signed in." };
+    const row = {
+      roadmap_id: roadmapId,
+      kind,
+      target_id: target_id || null,
+      author_id: user.id,
+      payload,
+      base_snapshot: base_snapshot || null,
+      note: note || null
+    };
+    const { data, error } = await client
+      .from("roadmap_proposals")
+      .insert(row)
+      .select("id, kind, target_id, author_id, payload, base_snapshot, note, status, decided_at, decided_by, decided_reason, created_at")
+      .single();
+    if (error) { console.error(error); return { error: error.message }; }
+    return { ok: true, row: data };
+  }
+
+  // Owner accepts or rejects. status must be "accepted" or "rejected".
+  async function decideProposal(proposalId, status, reason) {
+    if (isLocal()) return null;
+    const client = sb();
+    if (!client) return null;
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return null;
+    const { data, error } = await client
+      .from("roadmap_proposals")
+      .update({
+        status,
+        decided_at: new Date().toISOString(),
+        decided_by: user.id,
+        decided_reason: reason || null
+      })
+      .eq("id", proposalId)
+      .select("id, kind, target_id, author_id, payload, base_snapshot, note, status, decided_at, decided_by, decided_reason, created_at")
+      .single();
+    if (error) { console.error(error); return null; }
+    return data;
+  }
+
+  // Author cancels their own pending proposal.
+  async function cancelProposal(proposalId) {
+    if (isLocal()) return false;
+    const client = sb();
+    if (!client) return false;
+    const { error } = await client
+      .from("roadmap_proposals")
+      .delete()
+      .eq("id", proposalId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }
+
   window.RoadbookAPI = {
     list, get, create, update, remove,
     listSharedWithMe,
     listCollaborators, listInvitations, inviteCollaborator, removeCollaborator, cancelInvitation,
-    listComments, addComment, resolveComment, unresolveComment, commentCounts
+    listComments, addComment, resolveComment, unresolveComment, commentCounts,
+    listProposals, createProposal, decideProposal, cancelProposal
   };
 })();
