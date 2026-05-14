@@ -87,10 +87,23 @@ for (const f of ["index.html", "app.html"]) {
 // Copy templates.js as a sibling for app.html
 copyFileSync(join(DIST, "templates.js"), join(DIST, "templates.js"));
 
-// Config — env-substituted at build time, falls back to a placeholder so the
-// page at least loads and prints a console warning.
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.PUBLIC_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || "";
+// Config — prefer a local apps/web/config.js (gitignored) for dev; fall back
+// to env vars (Vercel build) so the same build script works in both contexts.
+const LOCAL_CONFIG = join(WEB, "config.js");
+let SUPABASE_URL = "";
+let SUPABASE_ANON_KEY = "";
+let configSource = "EMPTY";
+if (existsSync(LOCAL_CONFIG)) {
+  const raw = read(LOCAL_CONFIG);
+  const urlM = raw.match(/SUPABASE_URL\s*:\s*["']([^"']*)["']/);
+  const keyM = raw.match(/SUPABASE_ANON_KEY\s*:\s*["']([^"']*)["']/);
+  if (urlM) SUPABASE_URL = urlM[1];
+  if (keyM) SUPABASE_ANON_KEY = keyM[1];
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) configSource = "apps/web/config.js";
+}
+if (!SUPABASE_URL) SUPABASE_URL = process.env.SUPABASE_URL || process.env.PUBLIC_SUPABASE_URL || "";
+if (!SUPABASE_ANON_KEY) SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || "";
+if (configSource === "EMPTY" && SUPABASE_URL && SUPABASE_ANON_KEY) configSource = "env vars";
 const configJs = `window.ROADBOOK_CONFIG = {
   SUPABASE_URL: ${JSON.stringify(SUPABASE_URL)},
   SUPABASE_ANON_KEY: ${JSON.stringify(SUPABASE_ANON_KEY)}
@@ -118,4 +131,4 @@ console.log(`  app.html        (dashboard)`);
 console.log(`  editor.html     (cloud editor)`);
 console.log(`  engine.css/.js  (OSS engine reused)`);
 console.log(`  templates.js    (${Object.keys(templates).length} templates)`);
-console.log(`  config.js       (${SUPABASE_URL ? "env-injected" : "EMPTY — set SUPABASE_URL/SUPABASE_ANON_KEY"})`);
+console.log(`  config.js       (${configSource === "EMPTY" ? "EMPTY — set SUPABASE_URL/SUPABASE_ANON_KEY or create apps/web/config.js" : "from " + configSource})`);

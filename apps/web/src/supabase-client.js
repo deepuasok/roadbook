@@ -1,17 +1,33 @@
 // Thin wrapper around the Supabase JS client. Reads credentials from
 // window.ROADBOOK_CONFIG which is injected at build time (or via config.js).
+//
+// Local dev mode: when SUPABASE_URL / SUPABASE_ANON_KEY are missing, auth is
+// stubbed with a synthetic local session so the app is usable end-to-end
+// without a Supabase project. Roadmaps fall back to localStorage in that mode.
 (function () {
-  function getClient() {
-    if (window.__roadbookSb) return window.__roadbookSb;
+  const LOCAL_SESSION = {
+    user: {
+      id: "local-dev",
+      email: "local@roadbook.dev",
+      user_metadata: { full_name: "Local Dev", avatar_url: "" }
+    },
+    access_token: "local-dev",
+    token_type: "bearer"
+  };
+
+  function isLocalMode() {
     const cfg = window.ROADBOOK_CONFIG || {};
-    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
-      console.warn("Roadbook: Supabase config missing — set window.ROADBOOK_CONFIG before loading this script.");
-      return null;
-    }
+    return !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY;
+  }
+
+  function getClient() {
+    if (isLocalMode()) return null;
+    if (window.__roadbookSb) return window.__roadbookSb;
     if (!window.supabase || !window.supabase.createClient) {
       console.error("Roadbook: Supabase JS library not loaded.");
       return null;
     }
+    const cfg = window.ROADBOOK_CONFIG;
     const client = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
@@ -20,6 +36,7 @@
   }
 
   async function getSession() {
+    if (isLocalMode()) return LOCAL_SESSION;
     const sb = getClient();
     if (!sb) return null;
     const { data } = await sb.auth.getSession();
@@ -32,16 +49,27 @@
   }
 
   async function signInWithGoogle() {
+    if (isLocalMode()) { location.href = "/app.html"; return; }
     const sb = getClient();
-    if (!sb) return;
+    if (!sb) {
+      const msg = "Supabase JS failed to load. Check your network or rebuild.";
+      console.error(msg);
+      alert(msg);
+      return;
+    }
     const redirectTo = `${location.origin}/app.html`;
-    await sb.auth.signInWithOAuth({
+    const { error } = await sb.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo }
     });
+    if (error) {
+      console.error("Google sign-in failed:", error);
+      alert("Sign-in failed: " + error.message);
+    }
   }
 
   async function signOut() {
+    if (isLocalMode()) { location.href = "/"; return; }
     const sb = getClient();
     if (!sb) return;
     await sb.auth.signOut();
@@ -63,6 +91,7 @@
   window.RoadbookAuth = {
     getClient, getSession, getUser,
     signInWithGoogle, signOut,
-    requireAuth, bounceIfAuthed
+    requireAuth, bounceIfAuthed,
+    isLocalMode
   };
 })();

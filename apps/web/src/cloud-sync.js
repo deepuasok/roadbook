@@ -23,10 +23,13 @@
     return;
   }
 
-  const sb = window.RoadbookAuth.getClient();
-  if (!sb) {
-    location.href = "/";
-    return;
+  const localMode = window.RoadbookAuth.isLocalMode && window.RoadbookAuth.isLocalMode();
+  if (!localMode) {
+    const sb = window.RoadbookAuth.getClient();
+    if (!sb) {
+      location.href = "/";
+      return;
+    }
   }
 
   // Auth gate

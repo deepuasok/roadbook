@@ -60,6 +60,33 @@
   </div>
 </div>
 
+<!-- Import modal -->
+<div class="modal-overlay" id="importOverlay" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h3>Import roadmap</h3>
+    <div class="sub">Drop a Roadbook JSON file, paste JSON, or paste a URL we can fetch.</div>
+
+    <div style="margin-top:12px;">
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none;">
+      <button class="btn-cancel" type="button" id="importChooseFile" style="width:100%;">Choose JSON file…</button>
+      <div id="importFileName" style="font-size:12px; color:var(--text-dim); margin-top:6px; min-height:16px;"></div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:10px; margin:14px 0; color:var(--text-dim); font-size:12px;">
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+      <span>or paste below</span>
+      <div style="flex:1; height:1px; background:var(--border);"></div>
+    </div>
+
+    <textarea id="importText" rows="6" placeholder='Paste JSON, or a URL like https://…/scene.json' style="width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:9px; font-size:12.5px; font-family:ui-monospace,Menlo,monospace; resize:vertical;"></textarea>
+
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn-cancel" id="importCancel">Cancel</button>
+      <button class="btn-primary" id="importGo">Import</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status"></div>
 
 <script>
@@ -162,6 +189,19 @@
     createCard.addEventListener("click", openTemplatePicker);
     grid.appendChild(createCard);
 
+    // Import card
+    const importCard = document.createElement("div");
+    importCard.className = "rb-card rb-card-new";
+    importCard.innerHTML = `
+      <div class="plus-circle">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M3 13h10"/></svg>
+      </div>
+      <div class="label">Import roadmap</div>
+      <div class="hint">From JSON file or URL</div>
+    `;
+    importCard.addEventListener("click", openImport);
+    grid.appendChild(importCard);
+
     for (const r of roadmaps) {
       const c = document.createElement("div");
       c.className = "rb-card";
@@ -257,8 +297,76 @@
     if (e.key === "Enter") document.getElementById("renameSave").click();
   });
 
+  // ----- Import -----
+  function openImport() {
+    document.getElementById("importFile").value = "";
+    document.getElementById("importText").value = "";
+    document.getElementById("importFileName").textContent = "";
+    document.getElementById("importOverlay").classList.add("show");
+  }
+  function closeImport() { document.getElementById("importOverlay").classList.remove("show"); }
+
+  document.getElementById("importCancel").addEventListener("click", closeImport);
+  document.getElementById("importOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "importOverlay") closeImport();
+  });
+  document.getElementById("importChooseFile").addEventListener("click", () => {
+    document.getElementById("importFile").click();
+  });
+  document.getElementById("importFile").addEventListener("change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    document.getElementById("importFileName").textContent = f ? f.name : "";
+  });
+
+  function isLikelyUrl(s) { return /^https?:\/\//i.test(s.trim()); }
+
+  function validateScene(obj) {
+    if (!obj || typeof obj !== "object") return "Not a JSON object.";
+    if (obj.roadbookVersion !== 3) return "Not a Roadbook v3 scene (missing roadbookVersion: 3).";
+    if (!obj.data || typeof obj.data !== "object") return "Missing data.{year} payload.";
+    return null;
+  }
+
+  async function readPayloadFromInputs() {
+    const file = document.getElementById("importFile").files[0];
+    const txt = document.getElementById("importText").value.trim();
+    if (file) {
+      const raw = await file.text();
+      return { source: file.name, raw };
+    }
+    if (txt) {
+      if (isLikelyUrl(txt)) {
+        const resp = await fetch(txt);
+        if (!resp.ok) throw new Error(`Fetch failed: ${resp.status}`);
+        const raw = await resp.text();
+        return { source: txt, raw };
+      }
+      return { source: "pasted JSON", raw: txt };
+    }
+    throw new Error("Choose a file, or paste JSON / a URL.");
+  }
+
+  document.getElementById("importGo").addEventListener("click", async () => {
+    let payload;
+    try {
+      const { source, raw } = await readPayloadFromInputs();
+      const obj = JSON.parse(raw);
+      const err = validateScene(obj);
+      if (err) { toast(err, true); return; }
+      payload = obj;
+      const title = obj.title ? (obj.eyebrow ? `${obj.title} · ${obj.eyebrow}` : obj.title) : ("Imported · " + source);
+      const row = await RoadbookAPI.create({ title, data: payload });
+      if (!row) { toast("Could not save imported roadmap", true); return; }
+      closeImport();
+      location.href = `/editor.html#${row.id}`;
+    } catch (e) {
+      console.error(e);
+      toast(e.message || "Import failed", true);
+    }
+  });
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { closeTpl(); closeRename(); }
+    if (e.key === "Escape") { closeTpl(); closeRename(); closeImport(); }
   });
 
   await refresh();
