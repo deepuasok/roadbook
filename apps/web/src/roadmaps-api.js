@@ -21,9 +21,11 @@
     }
     const client = sb();
     if (!client) return [];
+    // RLS already scopes this to rows owned by the current user, but selecting
+    // user_id explicitly is useful if we ever filter client-side.
     const { data, error } = await client
       .from("roadmaps")
-      .select("id, title, data, created_at, updated_at")
+      .select("id, title, data, user_id, created_at, updated_at")
       .order("updated_at", { ascending: false });
     if (error) { console.error(error); return []; }
     return data || [];
@@ -33,9 +35,10 @@
     if (isLocal()) return lsRead().find((r) => r.id === id) || null;
     const client = sb();
     if (!client) return null;
+    // user_id is required so cloud-sync.js can determine owner vs collaborator.
     const { data, error } = await client
       .from("roadmaps")
-      .select("id, title, data, created_at, updated_at")
+      .select("id, title, data, user_id, created_at, updated_at")
       .eq("id", id)
       .maybeSingle();
     if (error) { console.error(error); return null; }
