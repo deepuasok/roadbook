@@ -117,38 +117,44 @@
     window.Roadbook.state.setCanCommit(() => false);
     setSaveStatus("readonly", "Read-only · changes go to owner");
 
-    // Register the drag-intent handler. Returns false so drag.js skips the
-    // commit and the card visually snaps back to its current real position.
-    window.Roadbook.drag.setOnDropIntent(async (item, kind, patch) => {
+    // Register the drag-intent handler. MUST be synchronous and return
+    // false so drag.js skips the commit and the card visually snaps back.
+    // The API call is fire-and-forget; UI updates via refreshProposals once
+    // the row exists.
+    window.Roadbook.drag.setOnDropIntent((item, kind, patch) => {
       const baseSnapshot = {
         startDate: item.startDate,
         endDate: item.endDate,
         laneId: item.laneId,
         row: item.row
       };
-      // Build proposed-state from base + patch (so payload is always the
-      // full final state, easy for owner-side ghost rendering)
+      // Full final state = base overlaid with patch fields
       const proposed = { ...baseSnapshot, ...patch };
-      try {
-        const result = await window.RoadbookAPI.createProposal(roadmapId, {
-          kind: "update-item",
-          target_id: item.id,
-          payload: proposed,
-          base_snapshot: baseSnapshot,
-          note: null
-        });
+      // Fire and forget; don't await inside the engine's sync drop handler
+      window.RoadbookAPI.createProposal(roadmapId, {
+        kind: "update-item",
+        target_id: item.id,
+        payload: proposed,
+        base_snapshot: baseSnapshot,
+        note: null
+      }).then((result) => {
         if (result.error) {
           if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast(result.error, true);
         } else {
-          if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast(kind === "move" ? "Move suggested" : "Resize suggested");
-          // Refresh proposal ghosts so the proposer sees their own pending change
+          if (window.RoadbookCollab?.toast) {
+            const label = kind === "move" ? "Move suggested"
+              : kind === "resize-end" ? "Resize suggested"
+              : kind === "resize-start" ? "Resize suggested"
+              : "Change suggested";
+            window.RoadbookCollab.toast(label);
+          }
           if (window.RoadbookCollab?.refreshProposals) window.RoadbookCollab.refreshProposals();
         }
-      } catch (e) {
+      }).catch((e) => {
         console.error("createProposal failed", e);
         if (window.RoadbookCollab?.toast) window.RoadbookCollab.toast("Could not send proposal", true);
-      }
-      return false; // block the local commit; card snaps back
+      });
+      return false; // synchronous block — card snaps back via replaceCard
     });
   } else {
     setSaveStatus("saved", "Saved");

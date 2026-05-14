@@ -539,18 +539,26 @@
   }
 
   // Observe DOM for engine re-renders (full + incremental). Re-paint badges
-  // AND proposal ghosts since the engine doesn't know about either.
-  const stageRoot = document.querySelector("main, .stage, body") || document.body;
+  // AND proposal ghosts. The observer disconnects during paint to avoid an
+  // infinite loop — our own DOM writes would otherwise re-trigger it
+  // immediately, freezing the page.
+  const stageRoot = document.getElementById("lanes") || document.querySelector(".page") || document.body;
   let repaintTimer = null;
-  const mo = new MutationObserver(() => {
-    // Debounce — paintBadges + paintProposalGhosts both query the DOM
+  function scheduleRepaint() {
     if (repaintTimer) return;
     repaintTimer = setTimeout(() => {
       repaintTimer = null;
-      paintBadges();
-      paintProposalGhosts();
-    }, 16);
-  });
+      try {
+        mo.disconnect();
+        paintBadges();
+        paintProposalGhosts();
+      } finally {
+        // Re-attach after this microtask so our own mutations don't refire it
+        Promise.resolve().then(() => mo.observe(stageRoot, { childList: true, subtree: true }));
+      }
+    }, 32);
+  }
+  const mo = new MutationObserver(scheduleRepaint);
   mo.observe(stageRoot, { childList: true, subtree: true });
 
   // Kick off initial badge fetch.
