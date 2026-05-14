@@ -84,17 +84,41 @@ create table if not exists public.roadmap_collaborators (
 create index if not exists idx_collab_user on public.roadmap_collaborators (user_id);
 create index if not exists idx_collab_roadmap on public.roadmap_collaborators (roadmap_id);
 
--- Now that roadmap_collaborators exists, add the SELECT policy on
--- public.roadmaps that lets collaborators see the rows they're shared on.
+-- ----- Security-definer helpers for RLS cross-table checks -----
+-- Without these, policies on `roadmaps` that reference `roadmap_collaborators`
+-- (and vice versa) would trigger nested RLS evaluation and Postgres would
+-- either reject the query or return empty results. Wrapping each cross-table
+-- check in a `security definer` function lets that lookup bypass RLS while
+-- still being scoped to the calling user's auth.uid().
+create or replace function public.is_roadmap_owner(p_roadmap_id uuid)
+returns boolean
+language sql
+security definer set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.roadmaps r
+    where r.id = p_roadmap_id and r.user_id = auth.uid()
+  );
+$$;
+
+create or replace function public.is_roadmap_collaborator(p_roadmap_id uuid)
+returns boolean
+language sql
+security definer set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.roadmap_collaborators c
+    where c.roadmap_id = p_roadmap_id and c.user_id = auth.uid()
+  );
+$$;
+
+-- Now that roadmap_collaborators and the helpers exist, add the SELECT
+-- policy on public.roadmaps that lets collaborators see shared rows.
 create policy "roadmaps_select_collaborator"
   on public.roadmaps for select
-  using (
-    exists (
-      select 1 from public.roadmap_collaborators c
-      where c.roadmap_id = roadmaps.id
-        and c.user_id = auth.uid()
-    )
-  );
+  using (public.is_roadmap_collaborator(id));
 
 -- Pending email-based invitations. Auto-claimed via trigger when the invitee
 -- signs in (or immediately if they already have an account).
@@ -207,9 +231,7 @@ drop policy if exists "collab_delete_self"     on public.roadmap_collaborators;
 
 create policy "collab_select_owner"
   on public.roadmap_collaborators for select
-  using (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-  );
+  using (public.is_roadmap_owner(roadmap_id));
 
 create policy "collab_select_self"
   on public.roadmap_collaborators for select
@@ -217,15 +239,11 @@ create policy "collab_select_self"
 
 create policy "collab_insert_owner"
   on public.roadmap_collaborators for insert
-  with check (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-  );
+  with check (public.is_roadmap_owner(roadmap_id));
 
 create policy "collab_delete_owner"
   on public.roadmap_collaborators for delete
-  using (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-  );
+  using (public.is_roadmap_owner(roadmap_id));
 
 create policy "collab_delete_self"
   on public.roadmap_collaborators for delete
@@ -238,12 +256,8 @@ drop policy if exists "invite_owner_all" on public.roadmap_invitations;
 
 create policy "invite_owner_all"
   on public.roadmap_invitations for all
-  using (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-  )
-  with check (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-  );
+  using (public.is_roadmap_owner(roadmap_id))
+  with check (public.is_roadmap_owner(roadmap_id));
 
 -- ----- RLS: roadmap_comments -----
 alter table public.roadmap_comments enable row level security;
@@ -253,33 +267,24 @@ drop policy if exists "comments_insert_participants" on public.roadmap_comments;
 drop policy if exists "comments_update_self_or_owner" on public.roadmap_comments;
 drop policy if exists "comments_delete_self" on public.roadmap_comments;
 
--- Helper predicate: am I owner or collaborator of this roadmap?
--- Inlined as a CTE-like check via `exists` since RLS doesn't support functions returning bool directly without security definer.
-
 create policy "comments_select_participants"
   on public.roadmap_comments for select
   using (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-    or
-    exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_comments.roadmap_id and c.user_id = auth.uid())
+    public.is_roadmap_owner(roadmap_id)
+    or public.is_roadmap_collaborator(roadmap_id)
   );
 
 create policy "comments_insert_participants"
   on public.roadmap_comments for insert
   with check (
     author_id = auth.uid()
-    and (
-      exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-      or
-      exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_comments.roadmap_id and c.user_id = auth.uid())
-    )
+    and (public.is_roadmap_owner(roadmap_id) or public.is_roadmap_collaborator(roadmap_id))
   );
 
 create policy "comments_update_self_or_owner"
   on public.roadmap_comments for update
   using (
-    author_id = auth.uid()
-    or exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
+    author_id = auth.uid() or public.is_roadmap_owner(roadmap_id)
   );
 
 create policy "comments_delete_self"
@@ -297,23 +302,20 @@ drop policy if exists "proposals_delete_self_pending" on public.roadmap_proposal
 create policy "proposals_select_participants"
   on public.roadmap_proposals for select
   using (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-    or
-    exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_proposals.roadmap_id and c.user_id = auth.uid())
+    public.is_roadmap_owner(roadmap_id)
+    or public.is_roadmap_collaborator(roadmap_id)
   );
 
 create policy "proposals_insert_collaborator"
   on public.roadmap_proposals for insert
   with check (
     author_id = auth.uid()
-    and exists (select 1 from public.roadmap_collaborators c where c.roadmap_id = roadmap_proposals.roadmap_id and c.user_id = auth.uid())
+    and public.is_roadmap_collaborator(roadmap_id)
   );
 
 create policy "proposals_update_owner"
   on public.roadmap_proposals for update
-  using (
-    exists (select 1 from public.roadmaps r where r.id = roadmap_id and r.user_id = auth.uid())
-  );
+  using (public.is_roadmap_owner(roadmap_id));
 
 create policy "proposals_delete_self_pending"
   on public.roadmap_proposals for delete
