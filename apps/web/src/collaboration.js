@@ -412,10 +412,79 @@
     };
   }
 
+  // Inject a Comments section into the engine's edit modal. One-time DOM
+  // addition during init; on every modal open we just repopulate it.
+  let modalCommentsInjected = false;
+  function injectModalComments() {
+    if (modalCommentsInjected) return;
+    const modal = document.querySelector(".modal.modal-edit");
+    if (!modal) return;
+    const actions = modal.querySelector(".modal-actions");
+    if (!actions) return;
+    const section = document.createElement("div");
+    section.className = "field modal-comments-section";
+    section.innerHTML = `
+      <label>Comments</label>
+      <div class="modal-comments-list" id="modalCommentsList"></div>
+      <textarea class="modal-comment-input" id="modalCommentInput" rows="2" placeholder="Add a comment (optional)"></textarea>
+    `;
+    modal.insertBefore(section, actions);
+    modalCommentsInjected = true;
+  }
+
+  async function loadCommentsIntoModal(itemId) {
+    injectModalComments();
+    const listEl = document.getElementById("modalCommentsList");
+    const inputEl = document.getElementById("modalCommentInput");
+    if (!listEl || !inputEl) return;
+    inputEl.value = "";
+    listEl.innerHTML = '<div class="comments-empty">Loading…</div>';
+    const list = await window.RoadbookAPI.listComments(roadmapId, itemId);
+    if (list.length === 0) {
+      listEl.innerHTML = '<div class="comments-empty">No comments yet.</div>';
+      return;
+    }
+    listEl.innerHTML = "";
+    for (const c of list) {
+      const row = document.createElement("div");
+      row.className = "comment" + (c.resolved_at ? " resolved" : "");
+      row.innerHTML = `
+        <div class="comment-meta">
+          <span class="comment-author"></span>
+          <span>·</span>
+          <span class="when"></span>
+          ${c.resolved_at ? '<span>·</span><span>Resolved</span>' : ""}
+        </div>
+        <div class="comment-body"></div>
+        <div class="comment-actions"></div>
+      `;
+      row.querySelector(".comment-author").textContent = nameForUser(c.author_id);
+      row.querySelector(".when").textContent = fmtTime(c.created_at);
+      row.querySelector(".comment-body").textContent = c.body;
+      const acts = row.querySelector(".comment-actions");
+      const canResolve = c.author_id === currentUser.id || isOwner;
+      if (canResolve) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = c.resolved_at ? "Reopen" : "Resolve";
+        b.addEventListener("click", async () => {
+          const fn = c.resolved_at ? "unresolveComment" : "resolveComment";
+          await window.RoadbookAPI[fn](c.id);
+          loadCommentsIntoModal(itemId);
+          refreshBadges();
+        });
+        acts.appendChild(b);
+      }
+      listEl.appendChild(row);
+    }
+  }
+
   function customizeEditModal(itemId) {
     const saveBtn = document.getElementById("mSave");
     const deleteBtn = document.getElementById("mDelete");
     if (!saveBtn) return;
+    // Both roles get the comments section repopulated on open
+    loadCommentsIntoModal(itemId);
     if (!isOwner) {
       // Collaborator: relabel save, hide delete
       saveBtn.textContent = "Propose changes";
@@ -445,58 +514,90 @@
     }
   }
 
-  // Capture-phase click handler on the Save button. For collaborators we
-  // build a proposal from the form values and upsert it; for owners we
-  // step out and let the engine's bubble-phase handler do its thing.
+  // Save button has TWO interceptors:
+  //  - Capture phase (collaborator only): replaces engine save with
+  //    "build a proposal from the form values" + post any comment in the
+  //    inline textarea. Stops propagation so engine.save() doesn't run.
+  //  - Bubble phase (everyone): if the textarea has a comment, post it.
+  //    For owner, this runs alongside engine.save() which has already
+  //    committed the edits.
   const mSaveBtn = document.getElementById("mSave");
   if (mSaveBtn) {
+    // ----- Capture: collaborator's Propose -----
     mSaveBtn.addEventListener("click", async (e) => {
-      if (isOwner) return; // let engine.save() handle it
+      if (isOwner) return; // let engine.save() handle the edit; bubble handler below posts the comment
       if (!modalEditingId) return;
       const item = window.Roadbook.state.findItem(modalEditingId);
       if (!item) return;
-      // Stop the engine's save() from also running
       e.stopImmediatePropagation();
       e.preventDefault();
 
       const form = readModalForm(item);
       const changed = Object.keys(form).some((k) => form[k] !== item[k]);
-      if (!changed) {
+      const commentInput = document.getElementById("modalCommentInput");
+      const commentBody = (commentInput?.value || "").trim();
+
+      // Three cases: only field changes / only comment / both / neither
+      if (!changed && !commentBody) {
         if (window.Roadbook?.modal?.close) window.Roadbook.modal.close();
         modalEditingId = null;
         toast("No changes to propose");
         return;
       }
 
-      const baseSnapshot = {
-        title: item.title,
-        startDate: item.startDate,
-        endDate: item.endDate,
-        laneId: item.laneId,
-        row: item.row,
-        status: item.status,
-        type: item.type,
-        complete: item.complete
-      };
-      const proposed = { ...baseSnapshot, ...form };
-
-      // Lock the button while saving
       mSaveBtn.disabled = true;
-      const result = await window.RoadbookAPI.createProposal(roadmapId, {
-        kind: "update-item",
-        target_id: item.id,
-        payload: proposed,
-        base_snapshot: baseSnapshot,
-        note: null
-      });
+      let proposalResult = null, commentResult = null;
+
+      if (changed) {
+        const baseSnapshot = {
+          title: item.title,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          laneId: item.laneId,
+          row: item.row,
+          status: item.status,
+          type: item.type,
+          complete: item.complete
+        };
+        const proposed = { ...baseSnapshot, ...form };
+        proposalResult = await window.RoadbookAPI.createProposal(roadmapId, {
+          kind: "update-item",
+          target_id: item.id,
+          payload: proposed,
+          base_snapshot: baseSnapshot,
+          note: null
+        });
+      }
+      if (commentBody) {
+        commentResult = await window.RoadbookAPI.addComment(roadmapId, item.id, commentBody);
+      }
       mSaveBtn.disabled = false;
 
-      if (result.error) { toast(result.error, true); return; }
-      toast(result.updated ? "Proposal updated" : "Proposal sent");
+      if (proposalResult?.error) { toast(proposalResult.error, true); return; }
+
+      const summary = changed && commentBody ? "Proposal sent · comment added"
+        : changed ? (proposalResult.updated ? "Proposal updated" : "Proposal sent")
+        : commentResult ? "Comment added"
+        : "Done";
+      toast(summary);
+
       if (window.Roadbook?.modal?.close) window.Roadbook.modal.close();
       modalEditingId = null;
       refreshProposals();
-    }, true /* capture phase — runs before engine handler */);
+      refreshBadges();
+    }, true /* capture phase */);
+
+    // ----- Bubble: post comment alongside owner's normal save -----
+    mSaveBtn.addEventListener("click", async () => {
+      if (!isOwner) return;
+      if (!modalEditingId) return;
+      const commentInput = document.getElementById("modalCommentInput");
+      const commentBody = (commentInput?.value || "").trim();
+      if (!commentBody) return;
+      const itemId = modalEditingId;
+      await window.RoadbookAPI.addComment(roadmapId, itemId, commentBody);
+      refreshBadges();
+    });
   }
 
   // Read the engine modal form into the same shape as an item record
@@ -691,7 +792,9 @@
         : `${counts.total} resolved`;
       badge.addEventListener("click", (e) => {
         e.stopPropagation();
-        openCommentsPanel(id);
+        // Open the edit modal (which now has an inline Comments section)
+        // instead of the legacy slide-out panel.
+        if (window.Roadbook?.modal?.open) window.Roadbook.modal.open(id);
       });
       card.appendChild(badge);
     });
