@@ -428,7 +428,11 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .lane-body {
   position: relative;
   min-height: var(--row-h);
-  transition: min-height 150ms ease;
+  transition: min-height 150ms ease, background-color 80ms ease;
+  border-radius: 4px;
+}
+.lane-body.lane-target {
+  background-color: var(--accent-soft);
 }
 
 .lane-body::before {

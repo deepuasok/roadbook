@@ -181,6 +181,12 @@
     const cardRect = card.getBoundingClientRect();
     const bodyRect = body.getBoundingClientRect();
 
+    // Snapshot every lane body's Y range once at drag start. Doing this on
+    // each pointermove was the source of jitter — DOM rects can shift if a
+    // lane resizes mid-drag. The index is authoritative until pointerup.
+    const laneIndex = buildLaneIndex();
+    const originLaneEntry = laneIndex.find((l) => l.laneId === item.laneId) || laneIndex[0];
+
     dragState = {
       mode: "move",
       id: card.dataset.id,
@@ -190,7 +196,10 @@
       cardScreenLeft: cardRect.left,
       cardScreenTop: cardRect.top,
       cardWidth: cardRect.width,
+      cardHeight: cardRect.height,
       originLane: item.laneId,
+      originLaneEntry,
+      laneIndex,
       originStartDate: item.startDate,
       originEndDate: item.endDate,
       originRow: item.row,
@@ -217,11 +226,20 @@
     // 1. Smooth visual follow via transform
     dragState.card.style.transform = `translate(${dx}px, ${dy}px)`;
 
-    // 2. Detect the lane body under the cursor and snap target
-    const targetBody = elementLaneBodyAt(e.clientX, e.clientY);
-    if (!targetBody) return;
+    // 2. Detect the lane using the card's visual center against the indexed
+    // lane Y ranges, with hysteresis against the origin lane. Switching only
+    // commits when the card center crosses past a different lane's midpoint —
+    // not on every boundary nudge — which kills the "small wobble flips
+    // swimlane" feel that vanilla boundary detection produces.
+    const cardLeftScreen = dragState.cardScreenLeft + dx;
+    const cardTopScreen = dragState.cardScreenTop + dy;
+    const cardCenterY = cardTopScreen + dragState.cardHeight / 2;
+    const targetEntry = pickLane(cardCenterY, dragState.originLaneEntry, dragState.laneIndex);
+    if (!targetEntry) return;
+    const targetBody = targetEntry.body;
+    setTargetLane(targetBody);
 
-    const targetRect = targetBody.getBoundingClientRect();
+    const targetRect = { top: targetEntry.top, left: targetEntry.left, width: targetEntry.width };
     const dates = window.Roadbook.dates;
     const year = activeYearInt();
     const totalDays = yearDays();
@@ -229,7 +247,6 @@
     const spanDays = dates.diffDays(dragState.originStartDate, dragState.originEndDate) + 1;
 
     // Card visual left edge in screen space (transform applied)
-    const cardLeftScreen = dragState.cardScreenLeft + dx;
     const xInTarget = cardLeftScreen - targetRect.left;
     let dayIndex = Math.floor((xInTarget / targetRect.width) * totalDays);
     const snappedDay = Math.round(dayIndex / SNAP) * SNAP;
@@ -238,8 +255,8 @@
     const newStartDate = dates.addDaysIso(yearStart, newStartDay);
     const newEndDate = dates.addDaysIso(newStartDate, spanDays - 1);
 
-    // Row from cursor Y in target body
-    const yInTarget = e.clientY - targetRect.top;
+    // Row from card top in target body (mirrors how X uses the card's left edge)
+    const yInTarget = cardTopScreen - targetRect.top;
     const row = Math.max(0, Math.floor(yInTarget / ROW_H));
 
     showGhostByDays(targetBody, newStartDay + 1, newStartDay + spanDays, row);
@@ -266,6 +283,7 @@
     card.style.transform = "";
     card.classList.remove("dragging");
     hideGhosts();
+    clearTargetLane();
 
     if (!dragging) {
       dragState = null;
@@ -309,9 +327,73 @@
   }
 
   // ----------------------------- Helpers -----------------------------
-  function elementLaneBodyAt(x, y) {
-    const stack = document.elementsFromPoint(x, y);
-    return stack.find((el) => el.classList && el.classList.contains("lane-body")) || null;
+  // Build a snapshot of every lane body's geometry. Used as the authoritative
+  // hit-test source for the lifetime of one drag, so DOM reflow mid-drag can't
+  // confuse lane selection.
+  function buildLaneIndex() {
+    const bodies = document.querySelectorAll(".lane-body");
+    const index = [];
+    for (const body of bodies) {
+      const r = body.getBoundingClientRect();
+      index.push({
+        laneId: body.dataset.lane,
+        body,
+        top: r.top,
+        bottom: r.bottom,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+        mid: r.top + r.height / 2
+      });
+    }
+    index.sort((a, b) => a.top - b.top);
+    return index;
+  }
+
+  // Pick the lane the card should snap to, given the card's vertical center
+  // and the origin lane. Hysteresis: switching away from origin only commits
+  // when the card center has crossed past the target lane's midpoint, not
+  // merely past its top/bottom edge. This mirrors Bryntum/Smartsheet behavior
+  // and prevents the "small wobble flips swimlane" feel.
+  function pickLane(centerY, origin, index) {
+    if (!index.length) return origin;
+    if (!origin) origin = index[0];
+
+    // Naive pick — the lane the center is actually in, or the nearest lane
+    // if the center sits in a gap (lane header strip / divider).
+    let naive = null;
+    for (const lane of index) {
+      if (centerY >= lane.top && centerY <= lane.bottom) { naive = lane; break; }
+    }
+    if (!naive) {
+      let bestDist = Infinity;
+      for (const lane of index) {
+        const d = centerY < lane.top ? lane.top - centerY : centerY - lane.bottom;
+        if (d < bestDist) { bestDist = d; naive = lane; }
+      }
+    }
+    if (!naive || naive.laneId === origin.laneId) return origin;
+
+    // Hysteresis: a non-origin lane only wins when the card center has
+    // crossed past its midpoint.
+    if (naive.mid > origin.mid) {
+      // Candidate is below origin → need centerY to be at/past its midpoint going down
+      return centerY >= naive.mid ? naive : origin;
+    }
+    // Candidate is above origin → need centerY to be at/past its midpoint going up
+    return centerY <= naive.mid ? naive : origin;
+  }
+
+  let currentTargetLane = null;
+  function setTargetLane(body) {
+    if (currentTargetLane === body) return;
+    if (currentTargetLane) currentTargetLane.classList.remove("lane-target");
+    if (body) body.classList.add("lane-target");
+    currentTargetLane = body;
+  }
+  function clearTargetLane() {
+    if (currentTargetLane) currentTargetLane.classList.remove("lane-target");
+    currentTargetLane = null;
   }
 
   // showGhostByDays — startDay/endDay are 1-based day-of-year inclusive

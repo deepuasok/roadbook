@@ -283,8 +283,11 @@
 }
 .comments-compose button { align-self: flex-end; }
 
-/* ----- Comment badge on item tiles ----- */
-.card[data-id] { position: relative; }
+/* ----- Comment badge on item tiles -----
+   Don't set position:relative on .card[data-id] — .card is already
+   position:absolute for the row/day grid, which is a positioning context
+   on its own. Overriding it (higher specificity than .card) flattened
+   every card into DOM order and broke row-based drag. */
 .comment-badge {
   position: absolute;
   top: 4px;

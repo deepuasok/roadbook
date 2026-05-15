@@ -438,7 +438,11 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .lane-body {
   position: relative;
   min-height: var(--row-h);
-  transition: min-height 150ms ease;
+  transition: min-height 150ms ease, background-color 80ms ease;
+  border-radius: 4px;
+}
+.lane-body.lane-target {
+  background-color: var(--accent-soft);
 }
 
 .lane-body::before {
@@ -1266,8 +1270,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   // manages persistence externally, e.g. Supabase). Default keeps OSS behavior.
   let storageMode = "local";
   let onPersistCallback = null;
+  // Mutation gate: when set, called before every commit. Returning false
+  // blocks the commit (used by the cloud build to put collaborators into a
+  // read-only / propose-only mode). Null-default keeps OSS behavior identical.
+  let canCommitFn = null;
   function setStorageMode(mode) { storageMode = mode === "memory" ? "memory" : "local"; }
   function setOnPersist(cb) { onPersistCallback = typeof cb === "function" ? cb : null; }
+  function setCanCommit(fn) { canCommitFn = typeof fn === "function" ? fn : null; }
 
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
@@ -1533,15 +1542,19 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
   // commit(mutator) — wraps mutation in snapshot + persist
   function commit(mutator) {
+    if (canCommitFn && canCommitFn() === false) return false;
     mutator();
     persist();
     snapshot();
+    return true;
   }
 
   // commitSilent — mutates + persists but does not push history (used for live drag)
   function commitSilent(mutator) {
+    if (canCommitFn && canCommitFn() === false) return false;
     mutator();
     persist();
+    return true;
   }
 
   function setActiveYear(year) {
@@ -1608,6 +1621,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     SNAP_DAYS,
     setStorageMode,
     setOnPersist,
+    setCanCommit,
     load,
     persist,
     snapshot,
@@ -1661,6 +1675,19 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   const DRAG_THRESHOLD = 4; // px before drag activates (so clicks still register)
 
   let dragState = null;
+  // Drop intent hook — called before state.commit at each commit site
+  // (move, resize-end, resize-start). Receives (item, kind, patch). If the
+  // handler returns false, the commit is skipped and the card snaps back to
+  // its original DOM position. Used by the cloud build to capture a drag as
+  // a proposal when the user is a collaborator. Null-default keeps OSS
+  // behavior identical.
+  let onDropIntentFn = null;
+  function setOnDropIntent(fn) { onDropIntentFn = typeof fn === "function" ? fn : null; }
+  function fireDropIntent(item, kind, patch) {
+    if (!onDropIntentFn) return true;
+    try { return onDropIntentFn(item, kind, patch) !== false; }
+    catch (e) { console.error("[drag] onDropIntent threw:", e); return true; }
+  }
 
   function attachCard(card) {
     card.addEventListener("pointerdown", onPointerDown);
@@ -1784,7 +1811,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         const finalEnd = Math.min(totalDays, dragState.initialStartDay + snappedSpan - 1);
         const newEndDate = dates.addDaysIso(yearStart, finalEnd - 1);
         if (newEndDate !== item.endDate) {
-          window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+          if (fireDropIntent(item, "resize-end", { endDate: newEndDate })) {
+            window.Roadbook.state.commit(() => { item.endDate = newEndDate; });
+          }
         }
       } else {
         // Snap startDay to nearest 14-day boundary; preserve endDate
@@ -1795,7 +1824,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         )) + 1;
         const newStartDate = dates.addDaysIso(yearStart, snappedStartDay - 1);
         if (newStartDate !== item.startDate) {
-          window.Roadbook.state.commit(() => { item.startDate = newStartDate; });
+          if (fireDropIntent(item, "resize-start", { startDate: newStartDate })) {
+            window.Roadbook.state.commit(() => { item.startDate = newStartDate; });
+          }
         }
       }
       window.Roadbook.app.updateCardDom(item);
@@ -1815,6 +1846,12 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     const cardRect = card.getBoundingClientRect();
     const bodyRect = body.getBoundingClientRect();
 
+    // Snapshot every lane body's Y range once at drag start. Doing this on
+    // each pointermove was the source of jitter — DOM rects can shift if a
+    // lane resizes mid-drag. The index is authoritative until pointerup.
+    const laneIndex = buildLaneIndex();
+    const originLaneEntry = laneIndex.find((l) => l.laneId === item.laneId) || laneIndex[0];
+
     dragState = {
       mode: "move",
       id: card.dataset.id,
@@ -1824,7 +1861,10 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       cardScreenLeft: cardRect.left,
       cardScreenTop: cardRect.top,
       cardWidth: cardRect.width,
+      cardHeight: cardRect.height,
       originLane: item.laneId,
+      originLaneEntry,
+      laneIndex,
       originStartDate: item.startDate,
       originEndDate: item.endDate,
       originRow: item.row,
@@ -1851,11 +1891,20 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     // 1. Smooth visual follow via transform
     dragState.card.style.transform = `translate(${dx}px, ${dy}px)`;
 
-    // 2. Detect the lane body under the cursor and snap target
-    const targetBody = elementLaneBodyAt(e.clientX, e.clientY);
-    if (!targetBody) return;
+    // 2. Detect the lane using the card's visual center against the indexed
+    // lane Y ranges, with hysteresis against the origin lane. Switching only
+    // commits when the card center crosses past a different lane's midpoint —
+    // not on every boundary nudge — which kills the "small wobble flips
+    // swimlane" feel that vanilla boundary detection produces.
+    const cardLeftScreen = dragState.cardScreenLeft + dx;
+    const cardTopScreen = dragState.cardScreenTop + dy;
+    const cardCenterY = cardTopScreen + dragState.cardHeight / 2;
+    const targetEntry = pickLane(cardCenterY, dragState.originLaneEntry, dragState.laneIndex);
+    if (!targetEntry) return;
+    const targetBody = targetEntry.body;
+    setTargetLane(targetBody);
 
-    const targetRect = targetBody.getBoundingClientRect();
+    const targetRect = { top: targetEntry.top, left: targetEntry.left, width: targetEntry.width };
     const dates = window.Roadbook.dates;
     const year = activeYearInt();
     const totalDays = yearDays();
@@ -1863,7 +1912,6 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     const spanDays = dates.diffDays(dragState.originStartDate, dragState.originEndDate) + 1;
 
     // Card visual left edge in screen space (transform applied)
-    const cardLeftScreen = dragState.cardScreenLeft + dx;
     const xInTarget = cardLeftScreen - targetRect.left;
     let dayIndex = Math.floor((xInTarget / targetRect.width) * totalDays);
     const snappedDay = Math.round(dayIndex / SNAP) * SNAP;
@@ -1872,8 +1920,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     const newStartDate = dates.addDaysIso(yearStart, newStartDay);
     const newEndDate = dates.addDaysIso(newStartDate, spanDays - 1);
 
-    // Row from cursor Y in target body
-    const yInTarget = e.clientY - targetRect.top;
+    // Row from card top in target body (mirrors how X uses the card's left edge)
+    const yInTarget = cardTopScreen - targetRect.top;
     const row = Math.max(0, Math.floor(yInTarget / ROW_H));
 
     showGhostByDays(targetBody, newStartDay + 1, newStartDay + spanDays, row);
@@ -1900,6 +1948,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     card.style.transform = "";
     card.classList.remove("dragging");
     hideGhosts();
+    clearTargetLane();
 
     if (!dragging) {
       dragState = null;
@@ -1918,12 +1967,20 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
           item.laneId !== drop.laneId
         );
         if (changed) {
-          window.Roadbook.state.commit(() => {
-            item.startDate = drop.startDate;
-            item.endDate = drop.endDate;
-            item.row = drop.row;
-            item.laneId = drop.laneId;
-          });
+          const patch = {
+            startDate: drop.startDate,
+            endDate: drop.endDate,
+            row: drop.row,
+            laneId: drop.laneId
+          };
+          if (fireDropIntent(item, "move", patch)) {
+            window.Roadbook.state.commit(() => {
+              item.startDate = patch.startDate;
+              item.endDate = patch.endDate;
+              item.row = patch.row;
+              item.laneId = patch.laneId;
+            });
+          }
         }
         const newCard = window.Roadbook.app.replaceCard(item, oldLane);
         if (newCard) attachCard(newCard);
@@ -1935,9 +1992,73 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   }
 
   // ----------------------------- Helpers -----------------------------
-  function elementLaneBodyAt(x, y) {
-    const stack = document.elementsFromPoint(x, y);
-    return stack.find((el) => el.classList && el.classList.contains("lane-body")) || null;
+  // Build a snapshot of every lane body's geometry. Used as the authoritative
+  // hit-test source for the lifetime of one drag, so DOM reflow mid-drag can't
+  // confuse lane selection.
+  function buildLaneIndex() {
+    const bodies = document.querySelectorAll(".lane-body");
+    const index = [];
+    for (const body of bodies) {
+      const r = body.getBoundingClientRect();
+      index.push({
+        laneId: body.dataset.lane,
+        body,
+        top: r.top,
+        bottom: r.bottom,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+        mid: r.top + r.height / 2
+      });
+    }
+    index.sort((a, b) => a.top - b.top);
+    return index;
+  }
+
+  // Pick the lane the card should snap to, given the card's vertical center
+  // and the origin lane. Hysteresis: switching away from origin only commits
+  // when the card center has crossed past the target lane's midpoint, not
+  // merely past its top/bottom edge. This mirrors Bryntum/Smartsheet behavior
+  // and prevents the "small wobble flips swimlane" feel.
+  function pickLane(centerY, origin, index) {
+    if (!index.length) return origin;
+    if (!origin) origin = index[0];
+
+    // Naive pick — the lane the center is actually in, or the nearest lane
+    // if the center sits in a gap (lane header strip / divider).
+    let naive = null;
+    for (const lane of index) {
+      if (centerY >= lane.top && centerY <= lane.bottom) { naive = lane; break; }
+    }
+    if (!naive) {
+      let bestDist = Infinity;
+      for (const lane of index) {
+        const d = centerY < lane.top ? lane.top - centerY : centerY - lane.bottom;
+        if (d < bestDist) { bestDist = d; naive = lane; }
+      }
+    }
+    if (!naive || naive.laneId === origin.laneId) return origin;
+
+    // Hysteresis: a non-origin lane only wins when the card center has
+    // crossed past its midpoint.
+    if (naive.mid > origin.mid) {
+      // Candidate is below origin → need centerY to be at/past its midpoint going down
+      return centerY >= naive.mid ? naive : origin;
+    }
+    // Candidate is above origin → need centerY to be at/past its midpoint going up
+    return centerY <= naive.mid ? naive : origin;
+  }
+
+  let currentTargetLane = null;
+  function setTargetLane(body) {
+    if (currentTargetLane === body) return;
+    if (currentTargetLane) currentTargetLane.classList.remove("lane-target");
+    if (body) body.classList.add("lane-target");
+    currentTargetLane = body;
+  }
+  function clearTargetLane() {
+    if (currentTargetLane) currentTargetLane.classList.remove("lane-target");
+    currentTargetLane = null;
   }
 
   // showGhostByDays — startDay/endDay are 1-based day-of-year inclusive
@@ -1957,7 +2078,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   }
 
   window.Roadbook = window.Roadbook || {};
-  window.Roadbook.drag = { attachCard, ROW_H };
+  window.Roadbook.drag = { attachCard, ROW_H, setOnDropIntent };
 })();
 
 
