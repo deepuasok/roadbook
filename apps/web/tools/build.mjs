@@ -61,6 +61,7 @@ const supabaseClient = read(join(WEB, "src", "supabase-client.js"));
 const roadmapsApi = read(join(WEB, "src", "roadmaps-api.js"));
 const cloudSync = read(join(WEB, "src", "cloud-sync.js"));
 const collaboration = read(join(WEB, "src", "collaboration.js"));
+const presence = read(join(WEB, "src", "presence.js"));
 const editorTemplate = read(join(WEB, "src", "editor.template.html"));
 
 const editorHtml = editorTemplate
@@ -73,7 +74,8 @@ const editorHtml = editorTemplate
   .replace("/* INJECT:SUPABASE_CLIENT */", supabaseClient)
   .replace("/* INJECT:ROADMAPS_API */", roadmapsApi)
   .replace("/* INJECT:CLOUD_SYNC */", cloudSync)
-  .replace("/* INJECT:COLLABORATION */", collaboration);
+  .replace("/* INJECT:COLLABORATION */", collaboration)
+  .replace("/* INJECT:PRESENCE */", presence);
 
 writeFileSync(join(DIST, "editor.html"), editorHtml);
 
