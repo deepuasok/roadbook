@@ -232,7 +232,7 @@
         startDate,
         endDate,
         row: Math.max(0, parseInt(it.row, 10) || 0),
-        status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
+        status: ["planned", "funded", "soon", "pending", "conditional", "deprioritized"].includes(it.status) ? it.status : "planned",
         type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
         complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
       };

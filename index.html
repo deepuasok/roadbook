@@ -57,6 +57,7 @@
   --status-pending: #DC2626;
   --status-conditional: #D1D5DB;
   --status-conditional-stroke: #9CA3AF;
+  --status-deprioritized: #9CA3AF;
 
   --fill-pct: rgba(16, 185, 129, 0.14);
   --fill-pct-text: #047857;
@@ -215,6 +216,7 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .dot-soon { background-color: var(--status-soon); }
 .dot-pending { background-color: var(--status-pending); }
 .dot-conditional { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.dot-deprioritized { background-color: var(--status-deprioritized); }
 .stripe-build { background-color: var(--type-build); }
 .stripe-data { background-color: var(--type-data); }
 .stripe-polish { background-color: var(--type-polish); }
@@ -349,11 +351,24 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 
 /* ---------- 6. Lanes ---------- */
 #lanes {
+  position: relative;
   border: 1px solid var(--lane-container-border);
   border-radius: 8px;
   overflow: hidden;
   margin: 16px 0 12px;
   box-shadow: var(--lane-container-shadow);
+}
+
+/* Lane reorder — grip handle drags a lane up/down; an accent line marks where
+   it will drop, and the lane being dragged dims. */
+.lane-grip { cursor: grab; touch-action: none; }
+.lane-grip:active { cursor: grabbing; }
+.lane.lane-dragging { opacity: 0.45; }
+#laneDropIndicator {
+  position: absolute; left: 0; right: 0; height: 3px;
+  margin-top: -1.5px;
+  background: var(--accent); border-radius: 2px;
+  z-index: 30; pointer-events: none; display: none;
 }
 
 .lane {
@@ -453,6 +468,9 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .lane-body.grow-above .card:not(.dragging) {
   transform: translateY(var(--row-h));
 }
+
+/* ctrl/cmd-drag copy mode — ring the dragged card and show the copy cursor */
+.card.copying { cursor: copy; box-shadow: 0 0 0 2px var(--accent); }
 
 .lane-body::before {
   content: "";
@@ -560,6 +578,10 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .card[data-status="soon"] .dot { background-color: var(--status-soon); }
 .card[data-status="pending"] .dot { background-color: var(--status-pending); }
 .card[data-status="conditional"] .dot { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.card[data-status="deprioritized"] .dot { background-color: var(--status-deprioritized); }
+/* Deprioritized — still on the roadmap, but struck through and dimmed */
+.card[data-status="deprioritized"] .title { text-decoration: line-through; color: var(--text-dim); }
+.card[data-status="deprioritized"] { opacity: 0.72; }
 
 .card .title {
   font-size: 12px; font-weight: 500; line-height: 1.2;
@@ -770,6 +792,7 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .chip:active { transform: scale(0.96); }
 .chip-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--status-planned); flex: 0 0 auto; }
 .chip-dot.dot-conditional { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.chip-dot.dot-deprioritized { background-color: var(--status-deprioritized); }
 .chip-stripe { display: inline-block; width: 4px; height: 12px; border-radius: 2px; flex: 0 0 auto; }
 .stripe-none {
   background: transparent;
@@ -1194,6 +1217,9 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
         <button type="button" class="chip" data-value="conditional" role="radio">
           <span class="chip-dot dot-conditional"></span><span>If capacity</span>
         </button>
+        <button type="button" class="chip" data-value="deprioritized" role="radio">
+          <span class="chip-dot dot-deprioritized"></span><span>Deprioritized</span>
+        </button>
       </div>
     </div>
 
@@ -1483,7 +1509,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         startDate,
         endDate,
         row: Math.max(0, parseInt(it.row, 10) || 0),
-        status: ["planned", "funded", "soon", "pending", "conditional"].includes(it.status) ? it.status : "planned",
+        status: ["planned", "funded", "soon", "pending", "conditional", "deprioritized"].includes(it.status) ? it.status : "planned",
         type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
         complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
       };
@@ -1895,6 +1921,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       originStartDate: item.startDate,
       originEndDate: item.endDate,
       originRow: item.row,
+      copy: e.ctrlKey || e.metaKey, // ctrl/cmd-drag duplicates instead of moving
       card
     };
 
@@ -1914,6 +1941,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       dragState.dragging = true;
       dragState.card.classList.add("dragging");
     }
+    // Track the copy modifier live so toggling ctrl/cmd mid-drag updates intent.
+    dragState.copy = e.ctrlKey || e.metaKey;
+    dragState.card.classList.toggle("copying", dragState.copy);
 
     // 1. Smooth visual follow via transform
     dragState.card.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -1992,7 +2022,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
     // Clear visual transform so the card settles into its DOM position
     card.style.transform = "";
-    card.classList.remove("dragging");
+    card.classList.remove("dragging", "copying");
     hideGhosts();
     clearGrowPreview();
     clearTargetLane();
@@ -2005,7 +2035,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
 
     if (drop) {
       const item = window.Roadbook.state.findItem(dragState.id);
-      if (item) {
+      if (item && dragState.copy) {
+        duplicateItem(item, drop);
+      } else if (item) {
         const oldLane = item.laneId;
         const changed = (
           item.startDate !== drop.startDate ||
@@ -2040,6 +2072,36 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       }
     }
     dragState = null;
+  }
+
+  // ctrl/cmd-drag: drop a clone of the item at the target, leaving the original
+  // untouched. The original's card stays in the DOM (its state never changed);
+  // we just render the new clone and re-pack the affected lanes.
+  function duplicateItem(item, drop) {
+    const originLane = item.laneId;
+    const newId = window.Roadbook.state.uid("it");
+    const ok = window.Roadbook.state.commit(() => {
+      const y = window.Roadbook.state.currentYear();
+      const clone = Object.assign({}, item, {
+        id: newId,
+        startDate: drop.startDate,
+        endDate: drop.endDate,
+        row: drop.row,
+        laneId: drop.laneId
+      });
+      y.items.push(clone);
+      window.Roadbook.app.compactLaneRows(drop.laneId);
+    });
+    if (ok === false) return; // read-only / blocked
+    const cloneItem = window.Roadbook.state.findItem(newId);
+    const cloneCard = window.Roadbook.app.placeItem(cloneItem);
+    if (cloneCard) attachCard(cloneCard);
+    window.Roadbook.app.syncLaneCardRows(drop.laneId);
+    window.Roadbook.app.syncLaneCardRows(originLane);
+    window.Roadbook.app.resizeLaneBody(drop.laneId);
+    window.Roadbook.app.resizeLaneBody(originLane);
+    if (cloneCard) cloneCard.focus();
+    window.Roadbook.app.toast("Duplicated");
   }
 
   // ----------------------------- Helpers -----------------------------
@@ -2442,7 +2504,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       funded: styleVar("--status-funded") || "#10B981",
       soon: styleVar("--status-soon") || "#F59E0B",
       pending: styleVar("--status-pending") || "#DC2626",
-      conditional: styleVar("--status-conditional") || "#D1D5DB"
+      conditional: styleVar("--status-conditional") || "#D1D5DB",
+      deprioritized: styleVar("--status-deprioritized") || "#9CA3AF"
     })[st] || "#111827";
 
     // Compute total height
@@ -2490,10 +2553,16 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       if (idx < data.lanes.length - 1) {
         out.push(`<line x1="${LANE_PAD}" y1="${cursorY + lh}" x2="${W - LANE_PAD}" y2="${cursorY + lh}" stroke="${border}" stroke-width="0.7"/>`);
       }
-      // Lane title
-      out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 26}" font-size="14" font-weight="600" fill="${text}">${escapeXml(lane.name)}</text>`);
+      // Lane title + description — kept inside the lane-head column so they
+      // don't bleed into the timeline grid. Name truncates to one line; the
+      // description wraps to at most two.
+      const headTextX = LANE_PAD + 16;
+      const headW = (GRID_X - 8) - headTextX; // usable width before the grid
+      out.push(`<text x="${headTextX}" y="${cursorY + 26}" font-size="14" font-weight="600" fill="${text}">${escapeXml(truncate(lane.name, Math.floor(headW / 7.2)))}</text>`);
       if (lane.description) {
-        out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 44}" font-size="11" fill="${textDim}">${escapeXml(lane.description)}</text>`);
+        wrapLines(lane.description, Math.floor(headW / 5.6), 2).forEach((ln, i) => {
+          out.push(`<text x="${headTextX}" y="${cursorY + 44 + i * 14}" font-size="11" fill="${textDim}">${escapeXml(ln)}</text>`);
+        });
       }
       // Month gridlines for this lane (light) and quarter dividers (stronger)
       for (let m = 1; m < COLS; m++) {
@@ -2526,10 +2595,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         // Status dot
         const sx = x + (tc === "transparent" ? 12 : 14);
         out.push(`<circle cx="${sx + 3}" cy="${y + h / 2}" r="3.5" fill="${statusColor(it.status)}"/>`);
-        // Title
+        // Title — deprioritized items render struck-through and dimmed
         const titleX = sx + 12;
         const titleMax = w - (titleX - x) - 12;
-        out.push(`<text x="${titleX}" y="${y + h / 2 + 4}" font-size="12" font-weight="500" fill="${text}">${escapeXml(truncate(it.title, Math.max(8, Math.floor(titleMax / 6.2))))}</text>`);
+        const deprio = it.status === "deprioritized";
+        const titleStrike = deprio ? ` text-decoration="line-through"` : "";
+        const titleFill = deprio ? (textDim) : text;
+        out.push(`<text x="${titleX}" y="${y + h / 2 + 4}" font-size="12" font-weight="500" fill="${titleFill}"${titleStrike}>${escapeXml(truncate(it.title, Math.max(8, Math.floor(titleMax / 6.2))))}</text>`);
       });
 
       cursorY += lh;
@@ -2545,6 +2617,30 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   function truncate(s, n) {
     if (!s) return "";
     return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s;
+  }
+
+  // Greedy word-wrap into at most maxLines of ~maxChars each (SVG <text> can't
+  // wrap on its own, so the lane-head description was bleeding into the grid).
+  // The last line gets an ellipsis when words were dropped.
+  function wrapLines(str, maxChars, maxLines) {
+    const words = String(str || "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const t = cur ? `${cur} ${w}` : w;
+      if (!cur || t.length <= maxChars) { cur = t; }
+      else { lines.push(cur); cur = w; if (lines.length >= maxLines) break; }
+    }
+    if (lines.length < maxLines && cur) lines.push(cur);
+    const dropped = words.join(" ").length > lines.join(" ").length;
+    return lines.slice(0, maxLines).map((l, i, arr) => {
+      let s = l.length > maxChars ? l.slice(0, maxChars - 1) + "…" : l;
+      if (i === arr.length - 1 && dropped && !s.endsWith("…")) {
+        s = s.slice(0, Math.max(1, maxChars - 1)).replace(/\s+$/, "") + "…";
+      }
+      return s;
+    });
   }
 
   function escapeXml(s) {
@@ -2873,6 +2969,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         <h2 contenteditable="true" spellcheck="false" data-role="name"></h2>
         <p contenteditable="true" spellcheck="false" data-role="desc" data-placeholder="Add a description"></p>
         <div class="lane-actions">
+          <button class="icon-action lane-grip" data-action="reorder-lane" aria-label="Drag to reorder lane" title="Drag to reorder">
+            <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="6" cy="4" r="1.3"/><circle cx="10" cy="4" r="1.3"/><circle cx="6" cy="8" r="1.3"/><circle cx="10" cy="8" r="1.3"/><circle cx="6" cy="12" r="1.3"/><circle cx="10" cy="12" r="1.3"/></svg>
+          </button>
           <button class="icon-action" data-action="add-item" aria-label="Add item" title="Add item">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
           </button>
@@ -2910,7 +3009,84 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       e.stopPropagation();
       openColorPicker(lane.id, colorBtn);
     });
+    attachLaneReorder(el.querySelector('[data-action="reorder-lane"]'), lane.id, el);
     return el;
+  }
+
+  // ---------- Lane reorder (drag the grip handle up/down) ----------
+  let laneDrag = null;
+  function attachLaneReorder(grip, laneId, laneEl) {
+    if (!grip) return;
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const lanes = [...document.querySelectorAll(".lane")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { id: el.dataset.laneId, top: r.top, bottom: r.bottom, mid: r.top + r.height / 2 };
+      });
+      laneDrag = { laneId, laneEl, grip, startY: e.clientY, pointerId: e.pointerId, lanes, moved: false };
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      grip.addEventListener("pointermove", onLaneMove);
+      grip.addEventListener("pointerup", onLaneUp);
+      grip.addEventListener("pointercancel", onLaneUp);
+    });
+  }
+  function laneInsertIndex(y) {
+    let idx = 0;
+    for (const r of laneDrag.lanes) { if (y > r.mid) idx++; }
+    return idx; // 0..n, insertion slot in the original order
+  }
+  function onLaneMove(e) {
+    if (!laneDrag) return;
+    const dy = e.clientY - laneDrag.startY;
+    if (!laneDrag.moved && Math.abs(dy) < 4) return;
+    laneDrag.moved = true;
+    laneDrag.laneEl.classList.add("lane-dragging");
+    showLaneIndicator(laneInsertIndex(e.clientY));
+  }
+  function showLaneIndicator(idx) {
+    const container = document.getElementById("lanes");
+    let ind = document.getElementById("laneDropIndicator");
+    if (!ind) {
+      ind = document.createElement("div");
+      ind.id = "laneDropIndicator";
+      container.appendChild(ind);
+    }
+    const crect = container.getBoundingClientRect();
+    const lanes = laneDrag.lanes;
+    let yPix;
+    if (idx <= 0) yPix = lanes[0].top - crect.top;
+    else if (idx >= lanes.length) yPix = lanes[lanes.length - 1].bottom - crect.top;
+    else yPix = lanes[idx].top - crect.top;
+    ind.style.top = `${yPix}px`;
+    ind.style.display = "block";
+  }
+  function onLaneUp(e) {
+    if (!laneDrag) return;
+    const grip = laneDrag.grip;
+    try { grip.releasePointerCapture(laneDrag.pointerId); } catch (_) {}
+    grip.removeEventListener("pointermove", onLaneMove);
+    grip.removeEventListener("pointerup", onLaneUp);
+    grip.removeEventListener("pointercancel", onLaneUp);
+    const ind = document.getElementById("laneDropIndicator");
+    if (ind) ind.style.display = "none";
+    laneDrag.laneEl.classList.remove("lane-dragging");
+    if (laneDrag.moved) reorderLane(laneDrag.laneId, laneInsertIndex(e.clientY));
+    laneDrag = null;
+  }
+  function reorderLane(laneId, targetIdx) {
+    const y = window.Roadbook.state.currentYear();
+    const from = y.lanes.findIndex((l) => l.id === laneId);
+    if (from < 0) return;
+    let to = targetIdx > from ? targetIdx - 1 : targetIdx; // account for the removal
+    to = Math.max(0, Math.min(y.lanes.length - 1, to));
+    if (to === from) return;
+    window.Roadbook.state.commit(() => {
+      const [moved] = y.lanes.splice(from, 1);
+      y.lanes.splice(to, 0, moved);
+    });
+    fullRender();
+    toast("Lane moved");
   }
 
   function bindEditable(el, onCommit) {

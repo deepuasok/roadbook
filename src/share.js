@@ -98,7 +98,8 @@
       funded: styleVar("--status-funded") || "#10B981",
       soon: styleVar("--status-soon") || "#F59E0B",
       pending: styleVar("--status-pending") || "#DC2626",
-      conditional: styleVar("--status-conditional") || "#D1D5DB"
+      conditional: styleVar("--status-conditional") || "#D1D5DB",
+      deprioritized: styleVar("--status-deprioritized") || "#9CA3AF"
     })[st] || "#111827";
 
     // Compute total height
@@ -146,10 +147,16 @@
       if (idx < data.lanes.length - 1) {
         out.push(`<line x1="${LANE_PAD}" y1="${cursorY + lh}" x2="${W - LANE_PAD}" y2="${cursorY + lh}" stroke="${border}" stroke-width="0.7"/>`);
       }
-      // Lane title
-      out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 26}" font-size="14" font-weight="600" fill="${text}">${escapeXml(lane.name)}</text>`);
+      // Lane title + description — kept inside the lane-head column so they
+      // don't bleed into the timeline grid. Name truncates to one line; the
+      // description wraps to at most two.
+      const headTextX = LANE_PAD + 16;
+      const headW = (GRID_X - 8) - headTextX; // usable width before the grid
+      out.push(`<text x="${headTextX}" y="${cursorY + 26}" font-size="14" font-weight="600" fill="${text}">${escapeXml(truncate(lane.name, Math.floor(headW / 7.2)))}</text>`);
       if (lane.description) {
-        out.push(`<text x="${LANE_PAD + 16}" y="${cursorY + 44}" font-size="11" fill="${textDim}">${escapeXml(lane.description)}</text>`);
+        wrapLines(lane.description, Math.floor(headW / 5.6), 2).forEach((ln, i) => {
+          out.push(`<text x="${headTextX}" y="${cursorY + 44 + i * 14}" font-size="11" fill="${textDim}">${escapeXml(ln)}</text>`);
+        });
       }
       // Month gridlines for this lane (light) and quarter dividers (stronger)
       for (let m = 1; m < COLS; m++) {
@@ -182,10 +189,13 @@
         // Status dot
         const sx = x + (tc === "transparent" ? 12 : 14);
         out.push(`<circle cx="${sx + 3}" cy="${y + h / 2}" r="3.5" fill="${statusColor(it.status)}"/>`);
-        // Title
+        // Title — deprioritized items render struck-through and dimmed
         const titleX = sx + 12;
         const titleMax = w - (titleX - x) - 12;
-        out.push(`<text x="${titleX}" y="${y + h / 2 + 4}" font-size="12" font-weight="500" fill="${text}">${escapeXml(truncate(it.title, Math.max(8, Math.floor(titleMax / 6.2))))}</text>`);
+        const deprio = it.status === "deprioritized";
+        const titleStrike = deprio ? ` text-decoration="line-through"` : "";
+        const titleFill = deprio ? (textDim) : text;
+        out.push(`<text x="${titleX}" y="${y + h / 2 + 4}" font-size="12" font-weight="500" fill="${titleFill}"${titleStrike}>${escapeXml(truncate(it.title, Math.max(8, Math.floor(titleMax / 6.2))))}</text>`);
       });
 
       cursorY += lh;
@@ -201,6 +211,30 @@
   function truncate(s, n) {
     if (!s) return "";
     return s.length > n ? s.slice(0, Math.max(1, n - 1)) + "…" : s;
+  }
+
+  // Greedy word-wrap into at most maxLines of ~maxChars each (SVG <text> can't
+  // wrap on its own, so the lane-head description was bleeding into the grid).
+  // The last line gets an ellipsis when words were dropped.
+  function wrapLines(str, maxChars, maxLines) {
+    const words = String(str || "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const t = cur ? `${cur} ${w}` : w;
+      if (!cur || t.length <= maxChars) { cur = t; }
+      else { lines.push(cur); cur = w; if (lines.length >= maxLines) break; }
+    }
+    if (lines.length < maxLines && cur) lines.push(cur);
+    const dropped = words.join(" ").length > lines.join(" ").length;
+    return lines.slice(0, maxLines).map((l, i, arr) => {
+      let s = l.length > maxChars ? l.slice(0, maxChars - 1) + "…" : l;
+      if (i === arr.length - 1 && dropped && !s.endsWith("…")) {
+        s = s.slice(0, Math.max(1, maxChars - 1)).replace(/\s+$/, "") + "…";
+      }
+      return s;
+    });
   }
 
   function escapeXml(s) {

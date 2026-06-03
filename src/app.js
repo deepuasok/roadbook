@@ -114,6 +114,9 @@
         <h2 contenteditable="true" spellcheck="false" data-role="name"></h2>
         <p contenteditable="true" spellcheck="false" data-role="desc" data-placeholder="Add a description"></p>
         <div class="lane-actions">
+          <button class="icon-action lane-grip" data-action="reorder-lane" aria-label="Drag to reorder lane" title="Drag to reorder">
+            <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="6" cy="4" r="1.3"/><circle cx="10" cy="4" r="1.3"/><circle cx="6" cy="8" r="1.3"/><circle cx="10" cy="8" r="1.3"/><circle cx="6" cy="12" r="1.3"/><circle cx="10" cy="12" r="1.3"/></svg>
+          </button>
           <button class="icon-action" data-action="add-item" aria-label="Add item" title="Add item">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
           </button>
@@ -151,7 +154,84 @@
       e.stopPropagation();
       openColorPicker(lane.id, colorBtn);
     });
+    attachLaneReorder(el.querySelector('[data-action="reorder-lane"]'), lane.id, el);
     return el;
+  }
+
+  // ---------- Lane reorder (drag the grip handle up/down) ----------
+  let laneDrag = null;
+  function attachLaneReorder(grip, laneId, laneEl) {
+    if (!grip) return;
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const lanes = [...document.querySelectorAll(".lane")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { id: el.dataset.laneId, top: r.top, bottom: r.bottom, mid: r.top + r.height / 2 };
+      });
+      laneDrag = { laneId, laneEl, grip, startY: e.clientY, pointerId: e.pointerId, lanes, moved: false };
+      try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+      grip.addEventListener("pointermove", onLaneMove);
+      grip.addEventListener("pointerup", onLaneUp);
+      grip.addEventListener("pointercancel", onLaneUp);
+    });
+  }
+  function laneInsertIndex(y) {
+    let idx = 0;
+    for (const r of laneDrag.lanes) { if (y > r.mid) idx++; }
+    return idx; // 0..n, insertion slot in the original order
+  }
+  function onLaneMove(e) {
+    if (!laneDrag) return;
+    const dy = e.clientY - laneDrag.startY;
+    if (!laneDrag.moved && Math.abs(dy) < 4) return;
+    laneDrag.moved = true;
+    laneDrag.laneEl.classList.add("lane-dragging");
+    showLaneIndicator(laneInsertIndex(e.clientY));
+  }
+  function showLaneIndicator(idx) {
+    const container = document.getElementById("lanes");
+    let ind = document.getElementById("laneDropIndicator");
+    if (!ind) {
+      ind = document.createElement("div");
+      ind.id = "laneDropIndicator";
+      container.appendChild(ind);
+    }
+    const crect = container.getBoundingClientRect();
+    const lanes = laneDrag.lanes;
+    let yPix;
+    if (idx <= 0) yPix = lanes[0].top - crect.top;
+    else if (idx >= lanes.length) yPix = lanes[lanes.length - 1].bottom - crect.top;
+    else yPix = lanes[idx].top - crect.top;
+    ind.style.top = `${yPix}px`;
+    ind.style.display = "block";
+  }
+  function onLaneUp(e) {
+    if (!laneDrag) return;
+    const grip = laneDrag.grip;
+    try { grip.releasePointerCapture(laneDrag.pointerId); } catch (_) {}
+    grip.removeEventListener("pointermove", onLaneMove);
+    grip.removeEventListener("pointerup", onLaneUp);
+    grip.removeEventListener("pointercancel", onLaneUp);
+    const ind = document.getElementById("laneDropIndicator");
+    if (ind) ind.style.display = "none";
+    laneDrag.laneEl.classList.remove("lane-dragging");
+    if (laneDrag.moved) reorderLane(laneDrag.laneId, laneInsertIndex(e.clientY));
+    laneDrag = null;
+  }
+  function reorderLane(laneId, targetIdx) {
+    const y = window.Roadbook.state.currentYear();
+    const from = y.lanes.findIndex((l) => l.id === laneId);
+    if (from < 0) return;
+    let to = targetIdx > from ? targetIdx - 1 : targetIdx; // account for the removal
+    to = Math.max(0, Math.min(y.lanes.length - 1, to));
+    if (to === from) return;
+    window.Roadbook.state.commit(() => {
+      const [moved] = y.lanes.splice(from, 1);
+      y.lanes.splice(to, 0, moved);
+    });
+    fullRender();
+    toast("Lane moved");
   }
 
   function bindEditable(el, onCommit) {

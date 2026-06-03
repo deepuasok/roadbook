@@ -47,6 +47,7 @@
   --status-pending: #DC2626;
   --status-conditional: #D1D5DB;
   --status-conditional-stroke: #9CA3AF;
+  --status-deprioritized: #9CA3AF;
 
   --fill-pct: rgba(16, 185, 129, 0.14);
   --fill-pct-text: #047857;
@@ -205,6 +206,7 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .dot-soon { background-color: var(--status-soon); }
 .dot-pending { background-color: var(--status-pending); }
 .dot-conditional { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.dot-deprioritized { background-color: var(--status-deprioritized); }
 .stripe-build { background-color: var(--type-build); }
 .stripe-data { background-color: var(--type-data); }
 .stripe-polish { background-color: var(--type-polish); }
@@ -339,11 +341,24 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 
 /* ---------- 6. Lanes ---------- */
 #lanes {
+  position: relative;
   border: 1px solid var(--lane-container-border);
   border-radius: 8px;
   overflow: hidden;
   margin: 16px 0 12px;
   box-shadow: var(--lane-container-shadow);
+}
+
+/* Lane reorder — grip handle drags a lane up/down; an accent line marks where
+   it will drop, and the lane being dragged dims. */
+.lane-grip { cursor: grab; touch-action: none; }
+.lane-grip:active { cursor: grabbing; }
+.lane.lane-dragging { opacity: 0.45; }
+#laneDropIndicator {
+  position: absolute; left: 0; right: 0; height: 3px;
+  margin-top: -1.5px;
+  background: var(--accent); border-radius: 2px;
+  z-index: 30; pointer-events: none; display: none;
 }
 
 .lane {
@@ -443,6 +458,9 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .lane-body.grow-above .card:not(.dragging) {
   transform: translateY(var(--row-h));
 }
+
+/* ctrl/cmd-drag copy mode — ring the dragged card and show the copy cursor */
+.card.copying { cursor: copy; box-shadow: 0 0 0 2px var(--accent); }
 
 .lane-body::before {
   content: "";
@@ -550,6 +568,10 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .card[data-status="soon"] .dot { background-color: var(--status-soon); }
 .card[data-status="pending"] .dot { background-color: var(--status-pending); }
 .card[data-status="conditional"] .dot { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.card[data-status="deprioritized"] .dot { background-color: var(--status-deprioritized); }
+/* Deprioritized — still on the roadmap, but struck through and dimmed */
+.card[data-status="deprioritized"] .title { text-decoration: line-through; color: var(--text-dim); }
+.card[data-status="deprioritized"] { opacity: 0.72; }
 
 .card .title {
   font-size: 12px; font-weight: 500; line-height: 1.2;
@@ -760,6 +782,7 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 .chip:active { transform: scale(0.96); }
 .chip-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: var(--status-planned); flex: 0 0 auto; }
 .chip-dot.dot-conditional { background-color: var(--status-conditional); border: 1px dashed var(--status-conditional-stroke); }
+.chip-dot.dot-deprioritized { background-color: var(--status-deprioritized); }
 .chip-stripe { display: inline-block; width: 4px; height: 12px; border-radius: 2px; flex: 0 0 auto; }
 .stripe-none {
   background: transparent;

@@ -203,6 +203,7 @@
       originStartDate: item.startDate,
       originEndDate: item.endDate,
       originRow: item.row,
+      copy: e.ctrlKey || e.metaKey, // ctrl/cmd-drag duplicates instead of moving
       card
     };
 
@@ -222,6 +223,9 @@
       dragState.dragging = true;
       dragState.card.classList.add("dragging");
     }
+    // Track the copy modifier live so toggling ctrl/cmd mid-drag updates intent.
+    dragState.copy = e.ctrlKey || e.metaKey;
+    dragState.card.classList.toggle("copying", dragState.copy);
 
     // 1. Smooth visual follow via transform
     dragState.card.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -300,7 +304,7 @@
 
     // Clear visual transform so the card settles into its DOM position
     card.style.transform = "";
-    card.classList.remove("dragging");
+    card.classList.remove("dragging", "copying");
     hideGhosts();
     clearGrowPreview();
     clearTargetLane();
@@ -313,7 +317,9 @@
 
     if (drop) {
       const item = window.Roadbook.state.findItem(dragState.id);
-      if (item) {
+      if (item && dragState.copy) {
+        duplicateItem(item, drop);
+      } else if (item) {
         const oldLane = item.laneId;
         const changed = (
           item.startDate !== drop.startDate ||
@@ -348,6 +354,36 @@
       }
     }
     dragState = null;
+  }
+
+  // ctrl/cmd-drag: drop a clone of the item at the target, leaving the original
+  // untouched. The original's card stays in the DOM (its state never changed);
+  // we just render the new clone and re-pack the affected lanes.
+  function duplicateItem(item, drop) {
+    const originLane = item.laneId;
+    const newId = window.Roadbook.state.uid("it");
+    const ok = window.Roadbook.state.commit(() => {
+      const y = window.Roadbook.state.currentYear();
+      const clone = Object.assign({}, item, {
+        id: newId,
+        startDate: drop.startDate,
+        endDate: drop.endDate,
+        row: drop.row,
+        laneId: drop.laneId
+      });
+      y.items.push(clone);
+      window.Roadbook.app.compactLaneRows(drop.laneId);
+    });
+    if (ok === false) return; // read-only / blocked
+    const cloneItem = window.Roadbook.state.findItem(newId);
+    const cloneCard = window.Roadbook.app.placeItem(cloneItem);
+    if (cloneCard) attachCard(cloneCard);
+    window.Roadbook.app.syncLaneCardRows(drop.laneId);
+    window.Roadbook.app.syncLaneCardRows(originLane);
+    window.Roadbook.app.resizeLaneBody(drop.laneId);
+    window.Roadbook.app.resizeLaneBody(originLane);
+    if (cloneCard) cloneCard.focus();
+    window.Roadbook.app.toast("Duplicated");
   }
 
   // ----------------------------- Helpers -----------------------------
