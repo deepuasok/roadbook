@@ -88,12 +88,23 @@
   // Re-render with the loaded data
   window.Roadbook.app.fullRender();
 
-  // ----- Role detection (Cut A) -----
-  // If the signed-in user is the roadmap owner, behavior is unchanged.
-  // If they're a collaborator, gate every mutation and skip the autosave
-  // hook entirely (RLS would reject the UPDATE anyway).
+  // Track the row's updated_at for the clobber guard (optimistic concurrency).
+  // Every successful save refreshes it; a stale value on save = someone else
+  // edited in the meantime.
+  let lastUpdatedAt = row.updated_at || null;
+
+  // ----- Role detection (Cut A + editor role) -----
+  // Owner: full edit, unchanged. Collaborators have a role:
+  //   'editor'   → full edit (direct mutations, autosave, undo/redo)
+  //   'proposer' → propose-and-approve (mutations blocked, become proposals)
+  // canEdit collapses owner + editor into the same editing path.
   const isOwner = row.user_id === user.id;
-  const role = isOwner ? "owner" : "collaborator";
+  let collabRole = null;
+  if (!isOwner) {
+    collabRole = await window.RoadbookAPI.myRole(roadmapId);
+  }
+  const canEdit = isOwner || collabRole === "editor";
+  const role = isOwner ? "owner" : (collabRole || "collaborator");
 
   // Expose context for collaboration.js (share modal, comments panel) and
   // for any future UI code that needs to branch on role.
@@ -102,6 +113,7 @@
     role,
     isOwner,
     isCollaborator: !isOwner,
+    canEdit,
     ownerId: row.user_id,
     currentUser: user
   };
@@ -109,8 +121,8 @@
   // listeners. The CustomEvent fires once the context is fully populated.
   document.dispatchEvent(new CustomEvent("roadbook:collab-ready", { detail: window.RoadbookCollab }));
 
-  if (!isOwner) {
-    // Collaborators: block any mutation that goes through state.commit
+  if (!canEdit) {
+    // Proposers: block any mutation that goes through state.commit
     // directly (modal saves, title edits, year changes, etc.). Drag and
     // resize actions are intercepted earlier by setOnDropIntent below and
     // turned into proposals; they never reach state.commit at all.
@@ -156,9 +168,16 @@
     setSaveStatus("saving", "Saving…");
     const payload = window.Roadbook.state.exportJSON();
     const title = payload.title || "Untitled";
-    const updated = await window.RoadbookAPI.update(roadmapId, { title, data: payload });
+    const updated = await window.RoadbookAPI.update(roadmapId, { title, data: payload }, lastUpdatedAt);
     inflight = false;
+    if (updated && updated.conflict) {
+      // Someone else saved since we loaded. Don't overwrite silently.
+      setSaveStatus("error", "Conflict — another session edited this");
+      handleConflict();
+      return;
+    }
     if (updated) {
+      lastUpdatedAt = updated.updated_at || lastUpdatedAt;
       setSaveStatus("saved", "Saved");
       // If another change came in while we were saving, kick another flush.
       if (dirty) schedule();
@@ -169,8 +188,28 @@
     }
   }
 
-  if (isOwner) {
-    // Flush on page unload (best-effort) — owner only
+  // Clobber-guard resolution. The roadmap saves as one blob, so a concurrent
+  // save can't be auto-merged — we let the user choose: reload and take
+  // theirs (losing the last debounced edit), or keep mine and overwrite.
+  function handleConflict() {
+    const reload = confirm(
+      "This roadmap was changed in another session.\n\n" +
+      "OK — reload and get the latest version (your last few unsaved edits are lost).\n" +
+      "Cancel — keep your version and overwrite theirs on the next save."
+    );
+    if (reload) {
+      location.reload();
+    } else {
+      // User chose to overwrite — drop the guard for the next save, then
+      // re-arm it once that save returns a fresh updated_at.
+      lastUpdatedAt = null;
+      dirty = true;
+      schedule();
+    }
+  }
+
+  if (canEdit) {
+    // Flush on page unload (best-effort) — owner + editor collaborators
     window.addEventListener("beforeunload", () => { if (dirty && !inflight) flush(); });
     window.Roadbook.state.setOnPersist(schedule);
   }

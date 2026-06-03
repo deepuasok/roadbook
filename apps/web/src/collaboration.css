@@ -128,6 +128,50 @@
   cursor: pointer;
 }
 .collab-row button.collab-revoke:hover { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
+/* Link-role select + per-collaborator role select */
+.collab-invite-row select,
+.collab-row .collab-role {
+  padding: 9px 11px;
+  border: 1px solid #e4e4e7;
+  border-radius: 9px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  color: #18181b;
+  outline: none;
+  cursor: pointer;
+}
+.collab-invite-row select { flex: 1; }
+.collab-invite-row select:focus,
+.collab-row .collab-role:focus {
+  border-color: #6366F1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+.collab-row .collab-role {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin-right: 8px;
+}
+
+/* Freshly-created share-link banner + link rows */
+.sharelink-banner {
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 9px;
+  margin: 6px 0 4px;
+}
+.collab-row .sharelink-url,
+.sharelink-banner .sharelink-url {
+  display: block;
+  color: #6366F1;
+  font-size: 11px;
+  margin-top: 2px;
+  word-break: break-all;
+}
+.collab-btn.sharelink-copy { margin-right: 8px; }
+
 .collab-empty {
   padding: 14px;
   text-align: center;

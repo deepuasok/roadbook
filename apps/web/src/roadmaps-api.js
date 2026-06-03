@@ -78,7 +78,12 @@
     return row;
   }
 
-  async function update(id, patch) {
+  // Optional clobber guard: pass expectedUpdatedAt (the updated_at value from
+  // the last load/save). The UPDATE only matches if updated_at is unchanged,
+  // so if someone else saved in the meantime we return { conflict: true }
+  // instead of silently overwriting their work. Without the guard, behaves
+  // as a plain last-write-wins update.
+  async function update(id, patch, expectedUpdatedAt) {
     if (isLocal()) {
       const rows = lsRead();
       const i = rows.findIndex((r) => r.id === id);
@@ -89,13 +94,18 @@
     }
     const client = sb();
     if (!client) return null;
-    const { data, error } = await client
-      .from("roadmaps")
-      .update(patch)
-      .eq("id", id)
+    let q = client.from("roadmaps").update(patch).eq("id", id);
+    if (expectedUpdatedAt) q = q.eq("updated_at", expectedUpdatedAt);
+    const { data, error } = await q
       .select("id, title, data, updated_at")
-      .single();
+      .maybeSingle();
     if (error) { console.error(error); return null; }
+    if (!data) {
+      // 0 rows matched. With a guard active, that means updated_at moved —
+      // a concurrent save happened. Signal it so the caller can reload.
+      if (expectedUpdatedAt) return { conflict: true };
+      return null;
+    }
     return data;
   }
 
@@ -144,7 +154,7 @@
     if (!client) return [];
     const { data, error } = await client
       .from("roadmap_collaborators")
-      .select("id, user_id, invited_by, invited_at")
+      .select("id, user_id, invited_by, invited_at, role")
       .eq("roadmap_id", roadmapId)
       .order("invited_at", { ascending: true });
     if (error) { console.error(error); return []; }
@@ -202,6 +212,104 @@
     const { error } = await client.from("roadmap_invitations").delete().eq("id", invitationId);
     if (error) { console.error(error); return false; }
     return true;
+  }
+
+  // Owner changes a collaborator's role ('editor' | 'proposer').
+  async function setCollaboratorRole(collaboratorId, role) {
+    if (isLocal()) return false;
+    const client = sb();
+    if (!client) return false;
+    const r = role === "editor" ? "editor" : "proposer";
+    const { error } = await client
+      .from("roadmap_collaborators")
+      .update({ role: r })
+      .eq("id", collaboratorId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }
+
+  // The signed-in user's role on a roadmap: 'editor', 'proposer', or null
+  // (null = not a collaborator; owner detection happens separately in
+  // cloud-sync via roadmaps.user_id).
+  async function myRole(roadmapId) {
+    if (isLocal()) return null;
+    const client = sb();
+    if (!client) return null;
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return null;
+    const { data, error } = await client
+      .from("roadmap_collaborators")
+      .select("role")
+      .eq("roadmap_id", roadmapId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (error) { console.error(error); return null; }
+    return data ? data.role : null;
+  }
+
+  // ---------- Share links (no-email join) ----------
+  function genShareToken() {
+    const bytes = new Uint8Array(24);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    let bin = "";
+    bytes.forEach((b) => (bin += String.fromCharCode(b)));
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  // Owner mints a link granting 'editor' (default) or 'proposer' access.
+  async function createShareLink(roadmapId, role) {
+    if (isLocal()) return { error: "Sharing requires Supabase." };
+    const client = sb();
+    if (!client) return { error: "Not signed in." };
+    const user = await window.RoadbookAuth.getUser();
+    if (!user) return { error: "Not signed in." };
+    const r = role === "proposer" ? "proposer" : "editor";
+    const token = genShareToken();
+    const { data, error } = await client
+      .from("roadmap_share_links")
+      .insert({ roadmap_id: roadmapId, token, role: r, created_by: user.id })
+      .select("id, token, role, created_at, revoked_at")
+      .single();
+    if (error) { console.error(error); return { error: error.message }; }
+    return { ok: true, link: data };
+  }
+
+  async function listShareLinks(roadmapId) {
+    if (isLocal()) return [];
+    const client = sb();
+    if (!client) return [];
+    const { data, error } = await client
+      .from("roadmap_share_links")
+      .select("id, token, role, created_at, revoked_at")
+      .eq("roadmap_id", roadmapId)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: true });
+    if (error) { console.error(error); return []; }
+    return data || [];
+  }
+
+  async function revokeShareLink(linkId) {
+    if (isLocal()) return false;
+    const client = sb();
+    if (!client) return false;
+    const { error } = await client
+      .from("roadmap_share_links")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("id", linkId);
+    if (error) { console.error(error); return false; }
+    return true;
+  }
+
+  // Caller opens a link → becomes a collaborator. Returns the roadmap_id
+  // (uuid) on success, or null if the token is invalid/revoked or the
+  // caller isn't signed in.
+  async function claimShareLink(token) {
+    if (isLocal()) return null;
+    const client = sb();
+    if (!client) return null;
+    const { data, error } = await client.rpc("claim_share_link", { p_token: token });
+    if (error) { console.error(error); return null; }
+    return data || null;
   }
 
   // ---------- Comments ----------
@@ -418,6 +526,8 @@
     list, get, create, update, remove,
     listSharedWithMe,
     listCollaborators, listInvitations, inviteCollaborator, removeCollaborator, cancelInvitation,
+    setCollaboratorRole, myRole,
+    createShareLink, listShareLinks, revokeShareLink, claimShareLink,
     listComments, addComment, resolveComment, unresolveComment, deleteComment, commentCounts,
     listProposals, createProposal, decideProposal, cancelProposal,
     participantDirectory

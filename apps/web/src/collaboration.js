@@ -32,6 +32,10 @@
 
   const ctx = window.RoadbookCollab;
   const { roadmapId, isOwner, currentUser } = ctx;
+  // canEdit = owner OR an 'editor'-role collaborator. Editors mutate directly
+  // (no propose interception, drag enabled); proposers go through proposals.
+  // Fall back to isOwner for older contexts that don't set canEdit.
+  const canEdit = ctx.canEdit != null ? ctx.canEdit : isOwner;
 
   // ----- Toast -----
   let toastEl = null;
@@ -139,8 +143,17 @@
   const inviteError = document.getElementById("inviteError");
   const collabList = document.getElementById("collabList");
   const shareClose = document.getElementById("shareClose");
+  // Share-link elements (no-email join)
+  const shareLinkRole = document.getElementById("shareLinkRole");
+  const shareLinkCreate = document.getElementById("shareLinkCreate");
+  const shareLinkResult = document.getElementById("shareLinkResult");
+  const shareLinksList = document.getElementById("shareLinksList");
 
   if (isOwner && shareBtn) shareBtn.hidden = false;
+
+  function shareUrlForToken(token) {
+    return `${location.origin}/app.html?join=${encodeURIComponent(token)}`;
+  }
 
   function openShareModal() {
     if (!shareOverlay) return;
@@ -148,7 +161,9 @@
     shareOverlay.classList.add("show");
     inviteEmail.value = "";
     inviteError.textContent = "";
+    if (shareLinkResult) shareLinkResult.hidden = true;
     refreshCollabList();
+    refreshShareLinks();
     setTimeout(() => inviteEmail.focus(), 50);
   }
   function closeShareModal() {
@@ -183,7 +198,10 @@
           <span class="name"></span>
           <small></small>
         </div>
-        <span class="status">Active</span>
+        <select class="collab-role" aria-label="Access level">
+          <option value="editor">Editor</option>
+          <option value="proposer">Proposer</option>
+        </select>
         <button class="collab-revoke" type="button">Remove</button>
       `;
       const p = participants[c.user_id];
@@ -193,6 +211,14 @@
       if (p?.full_name && p?.email) subtitleParts.push(p.email);
       subtitleParts.push("Joined " + fmtTime(c.invited_at));
       row.querySelector("small").textContent = subtitleParts.join(" · ");
+      // Role selector. Default to 'proposer' if the column is somehow null.
+      const roleSel = row.querySelector(".collab-role");
+      roleSel.value = c.role === "editor" ? "editor" : "proposer";
+      roleSel.addEventListener("change", async () => {
+        const ok = await window.RoadbookAPI.setCollaboratorRole(c.id, roleSel.value);
+        if (ok) toast(roleSel.value === "editor" ? "Now an editor" : "Now a proposer");
+        else { toast("Could not change role", true); refreshCollabList(); }
+      });
       row.querySelector("button").addEventListener("click", async () => {
         if (!confirm("Remove this collaborator's access?")) return;
         const ok = await window.RoadbookAPI.removeCollaborator(c.id);
@@ -238,6 +264,77 @@
   if (inviteEmail) inviteEmail.addEventListener("keydown", (e) => {
     if (e.key === "Enter") inviteSend.click();
   });
+
+  // ----- Share links (no-email join) -----
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch (_) { return false; }
+  }
+
+  async function refreshShareLinks() {
+    if (!shareLinksList) return;
+    const links = await window.RoadbookAPI.listShareLinks(roadmapId);
+    shareLinksList.innerHTML = "";
+    if (!links.length) {
+      shareLinksList.innerHTML = '<div class="collab-empty">No active links.</div>';
+      return;
+    }
+    for (const link of links) {
+      const url = shareUrlForToken(link.token);
+      const roleLabel = link.role === "editor" ? "Editor" : "Proposer";
+      const row = document.createElement("div");
+      row.className = "collab-row sharelink-row";
+      row.innerHTML = `
+        <div class="who">
+          <span class="name">${roleLabel} link</span>
+          <small class="sharelink-url"></small>
+        </div>
+        <button class="collab-btn sharelink-copy" type="button">Copy</button>
+        <button class="collab-revoke" type="button">Revoke</button>
+      `;
+      row.querySelector(".sharelink-url").textContent = url;
+      row.querySelector(".sharelink-copy").addEventListener("click", async () => {
+        const ok = await copyText(url);
+        toast(ok ? "Link copied" : "Copy failed — select the link and copy", !ok);
+      });
+      row.querySelector(".collab-revoke").addEventListener("click", async () => {
+        if (!confirm("Revoke this link? People who already joined keep access; remove them in the list above.")) return;
+        const ok = await window.RoadbookAPI.revokeShareLink(link.id);
+        if (ok) { toast("Link revoked"); refreshShareLinks(); }
+        else toast("Could not revoke", true);
+      });
+      shareLinksList.appendChild(row);
+    }
+  }
+
+  if (shareLinkCreate) {
+    shareLinkCreate.addEventListener("click", async () => {
+      shareLinkCreate.disabled = true;
+      const role = shareLinkRole ? shareLinkRole.value : "editor";
+      const result = await window.RoadbookAPI.createShareLink(roadmapId, role);
+      shareLinkCreate.disabled = false;
+      if (result.error) { toast(result.error, true); return; }
+      const url = shareUrlForToken(result.link.token);
+      // Show the fresh link prominently and copy it immediately.
+      if (shareLinkResult) {
+        shareLinkResult.hidden = false;
+        const urlEl = shareLinkResult.querySelector(".sharelink-url");
+        if (urlEl) urlEl.textContent = url;
+      }
+      const ok = await copyText(url);
+      toast(ok ? "Link created and copied" : "Link created — copy it below");
+      refreshShareLinks();
+    });
+  }
+  // Copy button inside the freshly-created-link banner
+  if (shareLinkResult) {
+    const bannerCopy = shareLinkResult.querySelector(".sharelink-copy");
+    if (bannerCopy) bannerCopy.addEventListener("click", async () => {
+      const urlEl = shareLinkResult.querySelector(".sharelink-url");
+      const ok = await copyText(urlEl ? urlEl.textContent : "");
+      toast(ok ? "Link copied" : "Copy failed", !ok);
+    });
+  }
 
   // ============================================================
   //  COMMENTS PANEL
@@ -532,8 +629,8 @@
     if (!saveBtn) return;
     // Both roles get the comments section repopulated on open
     loadCommentsIntoModal(itemId);
-    if (!isOwner) {
-      // Collaborator: relabel save, hide delete
+    if (!canEdit) {
+      // Proposer: relabel save, hide delete
       saveBtn.textContent = "Propose changes";
       saveBtn.classList.add("propose-btn");
       if (deleteBtn) deleteBtn.style.display = "none";
@@ -572,7 +669,7 @@
   if (mSaveBtn) {
     // ----- Capture: collaborator's Propose -----
     mSaveBtn.addEventListener("click", async (e) => {
-      if (isOwner) return; // let engine.save() handle the edit; bubble handler below posts the comment
+      if (canEdit) return; // owner/editor: let engine.save() commit; bubble handler below posts the comment
       if (!modalEditingId) return;
       const item = window.Roadbook.state.findItem(modalEditingId);
       if (!item) return;
@@ -634,9 +731,9 @@
       refreshBadges();
     }, true /* capture phase */);
 
-    // ----- Bubble: post comment alongside owner's normal save -----
+    // ----- Bubble: post comment alongside owner/editor's normal save -----
     mSaveBtn.addEventListener("click", async () => {
-      if (!isOwner) return;
+      if (!canEdit) return;
       if (!modalEditingId) return;
       const commentInput = document.getElementById("modalCommentInput");
       const commentBody = (commentInput?.value || "").trim();
@@ -798,7 +895,7 @@
   // (The visual feedback during drag still happens — only the drop is
   //  blocked. We could fully kill drag by removing the pointerdown
   //  listeners from cards, but that's invasive on engine code.)
-  if (!isOwner && window.Roadbook?.drag?.setOnDropIntent) {
+  if (!canEdit && window.Roadbook?.drag?.setOnDropIntent) {
     window.Roadbook.drag.setOnDropIntent(() => false);
   }
 

@@ -52,8 +52,26 @@
 <div class="collab-overlay" id="shareOverlay" role="dialog" aria-modal="true" hidden>
   <div class="collab-card">
     <h3>Share roadmap</h3>
-    <div class="sub">Invite people by email. They sign in with Google, comment on items, and (soon) propose changes. You stay the owner.</div>
+    <div class="sub">Share a link (no email needed) or invite by email. People sign in with Google. Editors change the roadmap directly; proposers suggest changes you approve. You stay the owner.</div>
 
+    <div class="collab-section-title">Share a link</div>
+    <div class="collab-invite-row">
+      <select id="shareLinkRole" aria-label="Link access level">
+        <option value="editor">Anyone with link can edit</option>
+        <option value="proposer">Anyone with link can propose</option>
+      </select>
+      <button class="collab-btn primary" id="shareLinkCreate" type="button">Create link</button>
+    </div>
+    <div class="sharelink-banner collab-row" id="shareLinkResult" hidden>
+      <div class="who">
+        <span class="name">Share link</span>
+        <small class="sharelink-url"></small>
+      </div>
+      <button class="collab-btn sharelink-copy" type="button">Copy</button>
+    </div>
+    <div class="collab-list" id="shareLinksList"></div>
+
+    <div class="collab-section-title">Invite by email</div>
     <div class="collab-invite-row">
       <input type="email" id="inviteEmail" placeholder="name@example.com" autocomplete="off">
       <button class="collab-btn primary" id="inviteSend" type="button">Invite</button>

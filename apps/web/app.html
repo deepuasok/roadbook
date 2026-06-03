@@ -103,9 +103,34 @@
     { key: "engineering-sprint", title: "Engineering Sprint", desc: "Now / Next / Later × FE / BE / Infra." }
   ];
 
+  // ----- No-email share-link join -----
+  // Capture a ?join=<token> BEFORE auth. requireAuth() bounces signed-out
+  // users to the landing page (dropping the URL + query), so we stash the
+  // token in localStorage to survive the Google sign-in round-trip. After
+  // sign-in the user lands back on /app.html and we claim it here.
+  const PENDING_JOIN_KEY = "roadbook:pendingJoin";
+  const joinParam = new URLSearchParams(location.search).get("join");
+  if (joinParam) {
+    localStorage.setItem(PENDING_JOIN_KEY, joinParam);
+    history.replaceState(null, "", "/app.html"); // clean URL so refresh won't re-trigger
+  }
+
   const session = await RoadbookAuth.requireAuth();
   if (!session) return;
   const user = session.user;
+
+  // Now signed in — claim any pending join and jump straight into the editor.
+  let joinFailed = false;
+  const pendingJoin = localStorage.getItem(PENDING_JOIN_KEY);
+  if (pendingJoin) {
+    localStorage.removeItem(PENDING_JOIN_KEY);
+    const joinedRoadmapId = await RoadbookAPI.claimShareLink(pendingJoin);
+    if (joinedRoadmapId) {
+      location.href = `/editor.html#${joinedRoadmapId}`;
+      return;
+    }
+    joinFailed = true; // surfaced via toast once it's defined below
+  }
   document.getElementById("userEmail").textContent = user.email || "";
   const avatar = document.getElementById("userAvatar");
   if (user.user_metadata?.avatar_url) {
@@ -121,6 +146,8 @@
     t.classList.add("show");
     setTimeout(() => t.classList.remove("show"), 2200);
   };
+
+  if (joinFailed) toast("That share link is invalid or expired.", true);
 
   function fmtDate(iso) {
     const d = new Date(iso);

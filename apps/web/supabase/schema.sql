@@ -78,6 +78,9 @@ create table if not exists public.roadmap_collaborators (
   user_id     uuid not null references auth.users(id) on delete cascade,
   invited_by  uuid not null references auth.users(id),
   invited_at  timestamptz not null default now(),
+  -- 'editor' collaborators mutate the roadmap directly; 'proposer' collaborators
+  -- go through the propose-and-approve flow. Default 'proposer' (least privilege).
+  role        text not null default 'proposer' check (role in ('editor','proposer')),
   unique (roadmap_id, user_id)
 );
 
@@ -296,6 +299,12 @@ create policy "collab_delete_self"
   on public.roadmap_collaborators for delete
   using (user_id = auth.uid());
 
+drop policy if exists "collab_update_owner" on public.roadmap_collaborators;
+create policy "collab_update_owner"
+  on public.roadmap_collaborators for update
+  using (public.is_roadmap_owner(roadmap_id))
+  with check (public.is_roadmap_owner(roadmap_id));
+
 -- ----- RLS: roadmap_invitations -----
 alter table public.roadmap_invitations enable row level security;
 
@@ -372,3 +381,92 @@ create policy "proposals_update_owner"
 create policy "proposals_delete_self_pending"
   on public.roadmap_proposals for delete
   using (author_id = auth.uid() and status = 'pending');
+
+-- =====================================================================
+-- SHARE LINKS + EDITOR ROLE (migration 002)
+-- =====================================================================
+
+-- No-email join links. `token` is a random URL-safe string minted client-side.
+-- Opening the link + signing in calls claim_share_link(), which inserts the
+-- caller as a collaborator with this link's role.
+create table if not exists public.roadmap_share_links (
+  id          uuid primary key default gen_random_uuid(),
+  roadmap_id  uuid not null references public.roadmaps(id) on delete cascade,
+  token       text not null unique,
+  role        text not null default 'editor' check (role in ('editor','proposer')),
+  created_by  uuid not null references auth.users(id),
+  created_at  timestamptz not null default now(),
+  revoked_at  timestamptz
+);
+
+create index if not exists idx_sharelinks_roadmap on public.roadmap_share_links (roadmap_id);
+
+alter table public.roadmap_share_links enable row level security;
+
+drop policy if exists "sharelinks_owner_all" on public.roadmap_share_links;
+create policy "sharelinks_owner_all"
+  on public.roadmap_share_links for all
+  using (public.is_roadmap_owner(roadmap_id))
+  with check (public.is_roadmap_owner(roadmap_id));
+
+-- Editor RLS: role='editor' collaborators can UPDATE the roadmap row.
+create or replace function public.is_roadmap_editor(p_roadmap_id uuid)
+returns boolean
+language sql
+security definer set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.roadmap_collaborators c
+    where c.roadmap_id = p_roadmap_id
+      and c.user_id = auth.uid()
+      and c.role = 'editor'
+  );
+$$;
+
+drop policy if exists "roadmaps_update_editor" on public.roadmaps;
+create policy "roadmaps_update_editor"
+  on public.roadmaps for update
+  using (public.is_roadmap_editor(id))
+  with check (public.is_roadmap_editor(id));
+
+-- Claim a share link → become a collaborator. Caller must be authenticated.
+create or replace function public.claim_share_link(p_token text)
+returns uuid
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_link public.roadmap_share_links;
+  v_uid  uuid := auth.uid();
+begin
+  if v_uid is null then
+    return null;
+  end if;
+
+  select * into v_link
+  from public.roadmap_share_links
+  where token = p_token and revoked_at is null
+  limit 1;
+
+  if v_link.id is null then
+    return null;
+  end if;
+
+  if exists (select 1 from public.roadmaps r where r.id = v_link.roadmap_id and r.user_id = v_uid) then
+    return v_link.roadmap_id;
+  end if;
+
+  insert into public.roadmap_collaborators (roadmap_id, user_id, invited_by, role)
+  values (v_link.roadmap_id, v_uid, v_link.created_by, v_link.role)
+  on conflict (roadmap_id, user_id) do update
+    set role = case
+      when v_link.role = 'editor' then 'editor'
+      else roadmap_collaborators.role
+    end;
+
+  return v_link.roadmap_id;
+end;
+$$;
+
+grant execute on function public.claim_share_link(text) to authenticated;
