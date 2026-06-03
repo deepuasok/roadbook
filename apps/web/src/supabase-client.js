@@ -40,7 +40,18 @@
     const sb = getClient();
     if (!sb) return null;
     const { data } = await sb.auth.getSession();
-    return data.session || null;
+    if (data.session) return data.session;
+    // No live session on this read. On a cold launch (app reopened after the
+    // 1-hour access token expired) getSession() can return empty before the
+    // background auto-refresh runs. Explicitly attempt a refresh using the
+    // stored refresh token before treating the user as logged out — this
+    // avoids an unnecessary bounce to the Google login when a valid refresh
+    // token is still present.
+    try {
+      const { data: refreshed } = await sb.auth.refreshSession();
+      if (refreshed && refreshed.session) return refreshed.session;
+    } catch (_) { /* refresh token genuinely invalid/expired → real logout */ }
+    return null;
   }
 
   async function getUser() {
