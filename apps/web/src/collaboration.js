@@ -641,6 +641,8 @@
         if (p.startDate) document.getElementById("fStartDate").value = p.startDate;
         if (p.endDate) document.getElementById("fEndDate").value = p.endDate;
         if (p.title) document.getElementById("fTitle").value = p.title;
+        if (typeof p.businessObjective === "string") document.getElementById("fBusinessObjective").value = p.businessObjective;
+        if (typeof p.definitionOfDone === "string") document.getElementById("fDefinitionOfDone").value = p.definitionOfDone;
         if (typeof p.complete === "number") {
           const compInput = document.getElementById("fComplete");
           if (compInput) {
@@ -701,7 +703,9 @@
           row: item.row,
           status: item.status,
           type: item.type,
-          complete: item.complete
+          complete: item.complete,
+          businessObjective: item.businessObjective || "",
+          definitionOfDone: item.definitionOfDone || ""
         };
         const proposed = { ...baseSnapshot, ...form };
         proposalResult = await window.RoadbookAPI.createProposal(roadmapId, {
@@ -756,7 +760,9 @@
       endDate,
       status: getChipGroupValue("fStatusGroup", item.status),
       type: getChipGroupValue("fTypeGroup", item.type),
-      complete: parseInt(document.getElementById("fComplete")?.value, 10) || 0
+      complete: parseInt(document.getElementById("fComplete")?.value, 10) || 0,
+      businessObjective: (document.getElementById("fBusinessObjective")?.value || "").trim(),
+      definitionOfDone: (document.getElementById("fDefinitionOfDone")?.value || "").trim()
     };
   }
 
@@ -885,6 +891,8 @@
     if (payload.status && payload.status !== item.status) parts.push(`Status: ${item.status} → ${payload.status}`);
     if (payload.type && payload.type !== item.type) parts.push(`Type: ${item.type} → ${payload.type}`);
     if (typeof payload.complete === "number" && payload.complete !== item.complete) parts.push(`Done: ${item.complete}% → ${payload.complete}%`);
+    if (payload.businessObjective != null && payload.businessObjective !== (item.businessObjective || "")) parts.push("Business Objective updated");
+    if (payload.definitionOfDone != null && payload.definitionOfDone !== (item.definitionOfDone || "")) parts.push("Definition of Done updated");
     return parts.join("\n") || "(no visible field changes)";
   }
   // ----- Drag DISABLED for collaborators -----

@@ -763,6 +763,36 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   border-bottom: 1px solid var(--border);
 }
 
+/* ----- Scrollable edit modal ----- */
+/* The element carries both .modal (rounded corners) and .modal-edit, so
+   overflow-y here clips to the rounded border. Title + actions stay pinned
+   via sticky so Save/Cancel are always reachable as the body grows. */
+.modal-edit {
+  max-height: 88vh;
+  overflow-y: auto;
+  padding-bottom: 0;
+}
+.modal-edit > h3 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--modal-bg);
+}
+.modal-edit > .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background-color: var(--modal-bg);
+  border-top: 1px solid var(--border);
+  padding: 12px 0 16px;
+  margin: 0;
+}
+.modal-edit textarea {
+  resize: vertical;
+  min-height: 56px;
+  line-height: 1.45;
+}
+
 /* ----- Chip group (status / type) ----- */
 .chip-group {
   display: flex; flex-wrap: wrap; gap: 6px;
@@ -1248,6 +1278,16 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
       </div>
     </div>
 
+    <div class="field">
+      <label for="fBusinessObjective">Business Objective</label>
+      <textarea id="fBusinessObjective" rows="3" placeholder="Why does this matter? What outcome or metric does it move?"></textarea>
+    </div>
+
+    <div class="field">
+      <label for="fDefinitionOfDone">Definition of Done</label>
+      <textarea id="fDefinitionOfDone" rows="3" placeholder="What must be true for this to count as complete?"></textarea>
+    </div>
+
     <div class="modal-actions">
       <button class="btn danger" id="mDelete">Remove</button>
       <div class="spacer"></div>
@@ -1511,7 +1551,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         row: Math.max(0, parseInt(it.row, 10) || 0),
         status: ["planned", "funded", "soon", "pending", "conditional", "deprioritized"].includes(it.status) ? it.status : "planned",
         type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
-        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
+        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100),
+        businessObjective: typeof it.businessObjective === "string" ? it.businessObjective : "",
+        definitionOfDone: typeof it.definitionOfDone === "string" ? it.definitionOfDone : ""
       };
     });
     return out;
@@ -2288,6 +2330,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     document.getElementById("fComplete").value = complete;
     document.getElementById("fCompleteVal").textContent = complete + "%";
     paintSliderFill(complete);
+    document.getElementById("fBusinessObjective").value = item.businessObjective || "";
+    document.getElementById("fDefinitionOfDone").value = item.definitionOfDone || "";
     document.getElementById("modalTitle").textContent = `Edit · ${item.title}`;
     document.getElementById("modalOverlay").classList.add("show");
     setTimeout(() => document.getElementById("fTitle").focus(), 40);
@@ -2317,9 +2361,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       endDate,
       status: getChipGroupValue("fStatusGroup", "planned"),
       type: getChipGroupValue("fTypeGroup", "other"),
-      complete: parseInt(document.getElementById("fComplete").value, 10) || 0
+      complete: parseInt(document.getElementById("fComplete").value, 10) || 0,
+      businessObjective: document.getElementById("fBusinessObjective").value.trim(),
+      definitionOfDone: document.getElementById("fDefinitionOfDone").value.trim()
     };
-    const changed = Object.keys(next).some((k) => next[k] !== item[k]);
+    // Treat undefined (legacy items) and "" as equal so opening + saving an
+    // item that never had these fields doesn't register a spurious change.
+    const changed = Object.keys(next).some((k) => next[k] !== (item[k] == null ? (typeof next[k] === "string" ? "" : item[k]) : item[k]));
     if (changed) {
       window.Roadbook.state.commit(() => Object.assign(item, next));
       window.Roadbook.app.updateCardDom(item);

@@ -234,7 +234,9 @@
         row: Math.max(0, parseInt(it.row, 10) || 0),
         status: ["planned", "funded", "soon", "pending", "conditional", "deprioritized"].includes(it.status) ? it.status : "planned",
         type: ["other", "build", "data", "polish"].includes(it.type) ? it.type : "other",
-        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100)
+        complete: clamp(parseInt(it.complete, 10) || 0, 0, 100),
+        businessObjective: typeof it.businessObjective === "string" ? it.businessObjective : "",
+        definitionOfDone: typeof it.definitionOfDone === "string" ? it.definitionOfDone : ""
       };
     });
     return out;

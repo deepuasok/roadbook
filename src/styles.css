@@ -753,6 +753,36 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   border-bottom: 1px solid var(--border);
 }
 
+/* ----- Scrollable edit modal ----- */
+/* The element carries both .modal (rounded corners) and .modal-edit, so
+   overflow-y here clips to the rounded border. Title + actions stay pinned
+   via sticky so Save/Cancel are always reachable as the body grows. */
+.modal-edit {
+  max-height: 88vh;
+  overflow-y: auto;
+  padding-bottom: 0;
+}
+.modal-edit > h3 {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--modal-bg);
+}
+.modal-edit > .modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background-color: var(--modal-bg);
+  border-top: 1px solid var(--border);
+  padding: 12px 0 16px;
+  margin: 0;
+}
+.modal-edit textarea {
+  resize: vertical;
+  min-height: 56px;
+  line-height: 1.45;
+}
+
 /* ----- Chip group (status / type) ----- */
 .chip-group {
   display: flex; flex-wrap: wrap; gap: 6px;

@@ -62,6 +62,8 @@
     document.getElementById("fComplete").value = complete;
     document.getElementById("fCompleteVal").textContent = complete + "%";
     paintSliderFill(complete);
+    document.getElementById("fBusinessObjective").value = item.businessObjective || "";
+    document.getElementById("fDefinitionOfDone").value = item.definitionOfDone || "";
     document.getElementById("modalTitle").textContent = `Edit · ${item.title}`;
     document.getElementById("modalOverlay").classList.add("show");
     setTimeout(() => document.getElementById("fTitle").focus(), 40);
@@ -91,9 +93,13 @@
       endDate,
       status: getChipGroupValue("fStatusGroup", "planned"),
       type: getChipGroupValue("fTypeGroup", "other"),
-      complete: parseInt(document.getElementById("fComplete").value, 10) || 0
+      complete: parseInt(document.getElementById("fComplete").value, 10) || 0,
+      businessObjective: document.getElementById("fBusinessObjective").value.trim(),
+      definitionOfDone: document.getElementById("fDefinitionOfDone").value.trim()
     };
-    const changed = Object.keys(next).some((k) => next[k] !== item[k]);
+    // Treat undefined (legacy items) and "" as equal so opening + saving an
+    // item that never had these fields doesn't register a spurious change.
+    const changed = Object.keys(next).some((k) => next[k] !== (item[k] == null ? (typeof next[k] === "string" ? "" : item[k]) : item[k]));
     if (changed) {
       window.Roadbook.state.commit(() => Object.assign(item, next));
       window.Roadbook.app.updateCardDom(item);
