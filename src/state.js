@@ -16,16 +16,28 @@
     "sky", "lavender", "lemon", "coral", "stone", "periwinkle"
   ];
 
+  // New roadmaps default to the current year plus the next two (3 years).
+  // Computed from the clock so this stays correct over time.
+  const BASE_YEAR = (() => { try { return new Date().getFullYear(); } catch (_) { return 2026; } })();
+  const DEFAULT_YEAR_SPAN = 3;
+  function defaultYearKeys() {
+    const out = [];
+    for (let i = 0; i < DEFAULT_YEAR_SPAN; i++) out.push(String(BASE_YEAR + i));
+    return out;
+  }
+  function blankYearMap() {
+    const m = {};
+    defaultYearKeys().forEach((y) => { m[y] = { lanes: [], items: [] }; });
+    return m;
+  }
+
   const DEFAULTS = {
     title: "Roadbook",
-    eyebrow: "Product · 2026",
+    eyebrow: "Product · " + BASE_YEAR,
     accent: "#6366F1",
     theme: "light",
-    activeYear: "2026",
-    data: {
-      "2026": { lanes: [], items: [] },
-      "2027": { lanes: [], items: [] }
-    }
+    activeYear: String(BASE_YEAR),
+    data: blankYearMap()
   };
 
   const store = {
@@ -34,10 +46,7 @@
     accent: DEFAULTS.accent,
     theme: DEFAULTS.theme,
     activeYear: DEFAULTS.activeYear,
-    data: {
-      "2026": { lanes: [], items: [] },
-      "2027": { lanes: [], items: [] }
-    },
+    data: blankYearMap(),
     history: [],
     historyIndex: -1
   };
@@ -132,8 +141,8 @@
     }
     try {
       // The set of years lives in META (m.years). Older saves without it fall
-      // back to the original 2026/2027 pair.
-      let yearList = ["2026", "2027"];
+      // back to the default span.
+      let yearList = defaultYearKeys();
       const metaRaw = localStorage.getItem(META_KEY);
       if (metaRaw) {
         const m = JSON.parse(metaRaw);
@@ -156,7 +165,7 @@
         }
       });
       // Guarantee at least one year exists.
-      if (!Object.keys(store.data).length) store.data = { "2026": { lanes: [], items: [] } };
+      if (!Object.keys(store.data).length) store.data = blankYearMap();
 
       // Active year must be one we actually have; else fall back to the first.
       const storedActive = localStorage.getItem(YEAR_KEY);
@@ -378,12 +387,15 @@
     return next;
   }
 
-  // Remove a year. Guarded: never removes the last remaining year. If the
-  // removed year was active, falls back to the earliest remaining year.
-  // (Caller is responsible for any "this has items" confirmation.)
+  // Remove a year. Hard guards: only an EMPTY year (no items) can be removed,
+  // and never the last remaining year. If the removed year was active, falls
+  // back to the earliest remaining year. Lanes alone don't block removal —
+  // "data" means actual roadmap items.
   function removeYear(year) {
     year = String(year);
-    if (!store.data[year]) return false;
+    const yd = store.data[year];
+    if (!yd) return false;
+    if (Array.isArray(yd.items) && yd.items.length > 0) return false;
     if (years().length <= 1) return false;
     commit(() => {
       delete store.data[year];
@@ -424,9 +436,7 @@
         Object.keys(payload.data).forEach((y) => {
           if (/^\d{4}$/.test(String(y))) next[y] = normalizeYear(payload.data[y], y);
         });
-        store.data = Object.keys(next).length
-          ? next
-          : { "2026": { lanes: [], items: [] }, "2027": { lanes: [], items: [] } };
+        store.data = Object.keys(next).length ? next : blankYearMap();
       }
       // Active year: prefer the payload's if it exists, else keep current if
       // still valid, else the earliest available.

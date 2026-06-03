@@ -7,12 +7,36 @@
     "2026": {
       "granularity": "day",
       "lanes": [
-        { "id": "now",   "name": "Now",   "description": "Shipping this quarter.",   "color": "sage" },
-        { "id": "next",  "name": "Next",  "description": "Up next, scoped.",          "color": "sky" },
-        { "id": "later", "name": "Later", "description": "On the radar, not scoped.", "color": "blush" }
+        {
+          "id": "now",
+          "name": "Now",
+          "description": "Shipping this quarter.",
+          "color": "sage"
+        },
+        {
+          "id": "next",
+          "name": "Next",
+          "description": "Up next, scoped.",
+          "color": "sky"
+        },
+        {
+          "id": "later",
+          "name": "Later",
+          "description": "On the radar, not scoped.",
+          "color": "blush"
+        }
       ],
       "items": []
     },
-    "2027": { "granularity": "day", "lanes": [], "items": [] }
+    "2027": {
+      "granularity": "day",
+      "lanes": [],
+      "items": []
+    },
+    "2028": {
+      "granularity": "day",
+      "lanes": [],
+      "items": []
+    }
   }
 }

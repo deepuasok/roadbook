@@ -602,9 +602,11 @@
     if (!container) return;
     const s = window.Roadbook.state.get();
     const list = window.Roadbook.state.years();
-    // Adding/removing years is an edit — hidden for propose-only collaborators.
-    const canEditYears = !document.body.classList.contains("collab-mode");
-    const showRemove = canEditYears && list.length > 1;
+    // Role gating. In OSS/local mode there's no RoadbookCollab, so the single
+    // user is effectively the owner with full control.
+    const collab = window.RoadbookCollab;
+    const isOwner = !collab || collab.isOwner;       // delete is owner-only
+    const canEdit = !collab || collab.canEdit;        // add: owner + editors
 
     container.innerHTML = "";
     list.forEach((y) => {
@@ -616,17 +618,22 @@
       const label = document.createElement("span");
       label.textContent = y;
       pill.appendChild(label);
-      if (showRemove) {
+      // The × shows only for the OWNER, only on EMPTY years (no items), and
+      // never on the last remaining year. A populated year (e.g. 2026 with
+      // work in it) has no × at all — it can't be accidentally deleted.
+      const itemCount = (s.data[y] && Array.isArray(s.data[y].items)) ? s.data[y].items.length : 0;
+      const removable = isOwner && itemCount === 0 && list.length > 1;
+      if (removable) {
         const x = document.createElement("span");
         x.className = "year-remove";
         x.textContent = "×";
         x.setAttribute("role", "button");
-        x.title = "Remove " + y;
+        x.title = "Remove " + y + " (empty)";
         pill.appendChild(x);
       }
       container.appendChild(pill);
     });
-    if (canEditYears) {
+    if (canEdit) {
       const add = document.createElement("button");
       add.className = "year-pill year-add";
       add.id = "addYearBtn";
@@ -641,11 +648,13 @@
   function removeYearWithGuard(year) {
     const s = window.Roadbook.state.get();
     const yd = s.data[year];
-    const itemCount = yd && Array.isArray(yd.items) ? yd.items.length : 0;
-    const msg = itemCount > 0
-      ? `Remove ${year}? It has ${itemCount} item${itemCount > 1 ? "s" : ""} that will be deleted.`
-      : `Remove ${year}?`;
-    if (!confirm(msg)) return;
+    // Only empty years are removable (engine enforces this too). If it somehow
+    // has items, refuse rather than offer to delete real work.
+    if (yd && Array.isArray(yd.items) && yd.items.length > 0) {
+      window.Roadbook.app.toast(`${year} has items — clear them first`, true);
+      return;
+    }
+    if (!confirm(`Remove ${year}? It's empty, so nothing is lost.`)) return;
     const ok = window.Roadbook.state.removeYear(year);
     if (ok) { fullRender(); window.Roadbook.app.toast(`Removed ${year}`); }
     else window.Roadbook.app.toast("Can't remove the only year", true);
@@ -784,18 +793,20 @@
     // First-run if everything is blank. Skip if a host (e.g. cloud-sync) has
     // set window.__suppressFirstRun — they'll populate state themselves.
     const s = window.Roadbook.state.get();
-    const noLanes2026 = !s.data["2026"].lanes.length;
-    const noLanes2027 = !s.data["2027"].lanes.length;
-    if (noLanes2026 && noLanes2027 && !window.__suppressFirstRun) {
-      // Seed with the BLANK defaults from defaults.js so the user sees a layout
+    const yrs = window.Roadbook.state.years();
+    const allEmpty = yrs.every((y) => !s.data[y].lanes.length && !s.data[y].items.length);
+    if (allEmpty && !window.__suppressFirstRun) {
+      // Seed the first year with the BLANK lane layout so the user sees a
+      // starting structure; remaining years stay empty.
+      const data = {};
+      yrs.forEach((y, i) => {
+        data[y] = i === 0 ? window.Roadbook.defaults.BLANK_LANES : window.Roadbook.defaults.BLANK_EMPTY;
+      });
       window.Roadbook.state.replaceAll({
         title: "Roadbook",
-        eyebrow: "Product · 2026",
-        activeYear: "2026",
-        data: {
-          "2026": window.Roadbook.defaults.BLANK_2026,
-          "2027": window.Roadbook.defaults.BLANK_2027
-        }
+        eyebrow: "Product · " + yrs[0],
+        activeYear: yrs[0],
+        data
       });
       setTimeout(() => window.Roadbook.templates.open(), 200);
     }
