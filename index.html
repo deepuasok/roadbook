@@ -195,6 +195,26 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
 }
 .year-pill.active { background-color: var(--text); color: var(--bg); }
 .year-pill:not(.active):hover { color: var(--text); }
+/* Dynamic year pills: label + optional remove (×), plus the add (+) button. */
+.year-pill { display: inline-flex; align-items: center; gap: 5px; }
+.year-pill .year-remove {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  margin-right: -4px;
+  border-radius: 50%;
+  font-size: 13px; line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.year-pill:hover .year-remove,
+.year-pill.active .year-remove { opacity: 0.55; }
+.year-pill .year-remove:hover { opacity: 1; background: rgba(220, 38, 38, 0.14); color: #DC2626; }
+.year-pill.year-add {
+  font-size: 14px; font-weight: 600;
+  padding: 5px 11px;
+  color: var(--text-dim);
+}
+.year-pill.year-add:hover { color: var(--text); background-color: rgba(0, 0, 0, 0.04); }
 
 .head-tools { display: inline-flex; gap: 6px; }
 .head-tools .icon-btn { padding: 5px 7px; }
@@ -1133,10 +1153,7 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
       <h1 id="title" contenteditable="true" spellcheck="false" data-placeholder="Roadmap title">Roadbook</h1>
     </div>
     <div class="head-right">
-      <div class="year-pills" id="yearPills" role="tablist" aria-label="Year">
-        <button class="year-pill active" data-year="2026" role="tab" aria-selected="true">2026</button>
-        <button class="year-pill" data-year="2027" role="tab" aria-selected="false">2027</button>
-      </div>
+      <div class="year-pills" id="yearPills" role="tablist" aria-label="Year"></div>
       <div class="head-tools">
         <button class="icon-btn" id="undoBtn" title="Undo (⌘Z)" aria-label="Undo">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h6.5a3 3 0 010 6H6"/><path d="M7 5L4 8l3 3"/></svg>
@@ -1462,33 +1479,42 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
       return;
     }
     try {
+      // The set of years lives in META (m.years). Older saves without it fall
+      // back to the original 2026/2027 pair.
+      let yearList = ["2026", "2027"];
       const metaRaw = localStorage.getItem(META_KEY);
       if (metaRaw) {
         const m = JSON.parse(metaRaw);
         store.title = m.title || DEFAULTS.title;
         store.eyebrow = m.eyebrow || DEFAULTS.eyebrow;
+        if (Array.isArray(m.years) && m.years.length) yearList = m.years.map(String);
       }
       store.accent = localStorage.getItem(ACCENT_KEY) || DEFAULTS.accent;
       store.theme = localStorage.getItem(THEME_KEY) || DEFAULTS.theme;
-      store.activeYear = localStorage.getItem(YEAR_KEY) === "2027" ? "2027" : "2026";
 
-      ["2026", "2027"].forEach((y) => {
+      // Build the data map from the persisted year list.
+      store.data = {};
+      yearList.forEach((y) => {
         const raw = localStorage.getItem(LAYOUT_KEY(y));
         if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            store.data[y] = normalizeYear(parsed, y);
-          } catch (_) {
-            store.data[y] = { lanes: [], items: [] };
-          }
+          try { store.data[y] = normalizeYear(JSON.parse(raw), y); }
+          catch (_) { store.data[y] = { lanes: [], items: [] }; }
+        } else {
+          store.data[y] = { lanes: [], items: [] };
         }
       });
+      // Guarantee at least one year exists.
+      if (!Object.keys(store.data).length) store.data = { "2026": { lanes: [], items: [] } };
+
+      // Active year must be one we actually have; else fall back to the first.
+      const storedActive = localStorage.getItem(YEAR_KEY);
+      store.activeYear = (storedActive && store.data[storedActive]) ? storedActive : years()[0];
     } catch (_) {
       // Carry on with defaults
     }
 
     // Backfill missing lane colors
-    ["2026", "2027"].forEach((y) => {
+    years().forEach((y) => {
       (store.data[y].lanes || []).forEach((l, i) => {
         if (!l.color) l.color = PALETTE[i % PALETTE.length];
       });
@@ -1581,12 +1607,13 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         localStorage.setItem(META_KEY, JSON.stringify({
           title: store.title,
           eyebrow: store.eyebrow,
+          years: Object.keys(store.data),
           schema: SCHEMA_VERSION
         }));
         localStorage.setItem(ACCENT_KEY, store.accent);
         localStorage.setItem(THEME_KEY, store.theme);
         localStorage.setItem(YEAR_KEY, store.activeYear);
-        ["2026", "2027"].forEach((y) => {
+        Object.keys(store.data).forEach((y) => {
           localStorage.setItem(LAYOUT_KEY(y), JSON.stringify(store.data[y]));
         });
       } catch (_) { /* storage full or disabled */ }
@@ -1666,10 +1693,52 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     return true;
   }
 
+  // Sorted list of year keys (ascending).
+  function years() {
+    return Object.keys(store.data).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  }
+
   function setActiveYear(year) {
-    if (year !== "2026" && year !== "2027") return;
+    year = String(year);
+    if (!store.data[year]) return;
     if (store.activeYear === year) return;
     commit(() => { store.activeYear = year; });
+  }
+
+  // Append the next consecutive year (max existing + 1) and switch to it.
+  // Seeds the new year with the active year's lane structure (fresh ids, no
+  // items) so it's ready to use with the same swimlanes. Returns the new year.
+  function addYear() {
+    const ints = years().map((y) => parseInt(y, 10)).filter((n) => !isNaN(n));
+    const next = String((ints.length ? Math.max(...ints) : 2025) + 1);
+    if (store.data[next]) { setActiveYear(next); return next; }
+    const src = store.data[store.activeYear];
+    const lanes = (src && Array.isArray(src.lanes) ? src.lanes : []).map((l, i) => ({
+      id: uid("lane"),
+      name: l.name,
+      description: l.description || "",
+      color: l.color || PALETTE[i % PALETTE.length]
+    }));
+    commit(() => {
+      store.data[next] = { granularity: "day", lanes, items: [] };
+      store.activeYear = next;
+    });
+    return next;
+  }
+
+  // Remove a year. Guarded: never removes the last remaining year. If the
+  // removed year was active, falls back to the earliest remaining year.
+  // (Caller is responsible for any "this has items" confirmation.)
+  function removeYear(year) {
+    year = String(year);
+    if (!store.data[year]) return false;
+    if (years().length <= 1) return false;
+    commit(() => {
+      delete store.data[year];
+      if (store.activeYear === year) store.activeYear = years()[0];
+    });
+    try { localStorage.removeItem(LAYOUT_KEY(year)); } catch (_) { /* noop */ }
+    return true;
   }
 
   function setTitle(t) {
@@ -1693,17 +1762,26 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
   }
 
   function replaceAll(payload) {
-    // Used by template loader and JSON import
+    // Used by template loader and JSON import. Accepts any set of 4-digit
+    // year keys present in payload.data.
     commit(() => {
       if (payload.title) store.title = String(payload.title).slice(0, 120);
       if (payload.eyebrow) store.eyebrow = String(payload.eyebrow).slice(0, 80);
-      if (payload.activeYear === "2026" || payload.activeYear === "2027") {
-        store.activeYear = payload.activeYear;
-      }
-      if (payload.data) {
-        ["2026", "2027"].forEach((y) => {
-          if (payload.data[y]) store.data[y] = normalizeYear(payload.data[y], y);
+      if (payload.data && typeof payload.data === "object") {
+        const next = {};
+        Object.keys(payload.data).forEach((y) => {
+          if (/^\d{4}$/.test(String(y))) next[y] = normalizeYear(payload.data[y], y);
         });
+        store.data = Object.keys(next).length
+          ? next
+          : { "2026": { lanes: [], items: [] }, "2027": { lanes: [], items: [] } };
+      }
+      // Active year: prefer the payload's if it exists, else keep current if
+      // still valid, else the earliest available.
+      if (payload.activeYear && store.data[String(payload.activeYear)]) {
+        store.activeYear = String(payload.activeYear);
+      } else if (!store.data[store.activeYear]) {
+        store.activeYear = years()[0];
       }
     });
   }
@@ -1743,6 +1821,9 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     currentYear,
     findItem,
     findLane,
+    years,
+    addYear,
+    removeYear,
     setActiveYear,
     setTitle,
     setEyebrow,
@@ -3003,11 +3084,7 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     document.getElementById("title").textContent = s.title;
     document.getElementById("eyebrow").textContent = s.eyebrow;
     document.getElementById("axisYear").textContent = s.activeYear;
-    document.querySelectorAll(".year-pill").forEach((p) => {
-      const active = p.dataset.year === s.activeYear;
-      p.classList.toggle("active", active);
-      p.setAttribute("aria-selected", active ? "true" : "false");
-    });
+    renderYearPills();
     document.documentElement.style.setProperty("--accent", s.accent);
     document.body.setAttribute("data-theme", s.theme);
     refreshUndoRedo();
@@ -3522,14 +3599,85 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     if (r) r.disabled = !window.Roadbook.state.canRedo();
   }
 
+  // ---------- Year pills (dynamic) ----------
+  function renderYearPills() {
+    const container = document.getElementById("yearPills");
+    if (!container) return;
+    const s = window.Roadbook.state.get();
+    const list = window.Roadbook.state.years();
+    // Adding/removing years is an edit — hidden for propose-only collaborators.
+    const canEditYears = !document.body.classList.contains("collab-mode");
+    const showRemove = canEditYears && list.length > 1;
+
+    container.innerHTML = "";
+    list.forEach((y) => {
+      const pill = document.createElement("button");
+      pill.className = "year-pill" + (y === s.activeYear ? " active" : "");
+      pill.dataset.year = y;
+      pill.setAttribute("role", "tab");
+      pill.setAttribute("aria-selected", y === s.activeYear ? "true" : "false");
+      const label = document.createElement("span");
+      label.textContent = y;
+      pill.appendChild(label);
+      if (showRemove) {
+        const x = document.createElement("span");
+        x.className = "year-remove";
+        x.textContent = "×";
+        x.setAttribute("role", "button");
+        x.title = "Remove " + y;
+        pill.appendChild(x);
+      }
+      container.appendChild(pill);
+    });
+    if (canEditYears) {
+      const add = document.createElement("button");
+      add.className = "year-pill year-add";
+      add.id = "addYearBtn";
+      add.type = "button";
+      add.title = "Add the next year";
+      add.setAttribute("aria-label", "Add year");
+      add.textContent = "+";
+      container.appendChild(add);
+    }
+  }
+
+  function removeYearWithGuard(year) {
+    const s = window.Roadbook.state.get();
+    const yd = s.data[year];
+    const itemCount = yd && Array.isArray(yd.items) ? yd.items.length : 0;
+    const msg = itemCount > 0
+      ? `Remove ${year}? It has ${itemCount} item${itemCount > 1 ? "s" : ""} that will be deleted.`
+      : `Remove ${year}?`;
+    if (!confirm(msg)) return;
+    const ok = window.Roadbook.state.removeYear(year);
+    if (ok) { fullRender(); window.Roadbook.app.toast(`Removed ${year}`); }
+    else window.Roadbook.app.toast("Can't remove the only year", true);
+  }
+
   // ---------- Wire top controls ----------
   function wireTop() {
-    document.querySelectorAll(".year-pill").forEach((p) => {
-      p.addEventListener("click", () => {
-        window.Roadbook.state.setActiveYear(p.dataset.year);
-        fullRender();
+    const yearPills = document.getElementById("yearPills");
+    if (yearPills) {
+      yearPills.addEventListener("click", (e) => {
+        const removeBtn = e.target.closest(".year-remove");
+        if (removeBtn) {
+          e.stopPropagation();
+          const pill = removeBtn.closest(".year-pill");
+          if (pill && pill.dataset.year) removeYearWithGuard(pill.dataset.year);
+          return;
+        }
+        if (e.target.closest(".year-add")) {
+          window.Roadbook.state.addYear();
+          fullRender();
+          return;
+        }
+        const pill = e.target.closest(".year-pill");
+        if (pill && pill.dataset.year) {
+          window.Roadbook.state.setActiveYear(pill.dataset.year);
+          fullRender();
+        }
       });
-    });
+    }
 
     bindEditable(document.getElementById("title"), (v) => window.Roadbook.state.setTitle(v));
     bindEditable(document.getElementById("eyebrow"), (v) => window.Roadbook.state.setEyebrow(v));

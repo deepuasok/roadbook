@@ -131,33 +131,42 @@
       return;
     }
     try {
+      // The set of years lives in META (m.years). Older saves without it fall
+      // back to the original 2026/2027 pair.
+      let yearList = ["2026", "2027"];
       const metaRaw = localStorage.getItem(META_KEY);
       if (metaRaw) {
         const m = JSON.parse(metaRaw);
         store.title = m.title || DEFAULTS.title;
         store.eyebrow = m.eyebrow || DEFAULTS.eyebrow;
+        if (Array.isArray(m.years) && m.years.length) yearList = m.years.map(String);
       }
       store.accent = localStorage.getItem(ACCENT_KEY) || DEFAULTS.accent;
       store.theme = localStorage.getItem(THEME_KEY) || DEFAULTS.theme;
-      store.activeYear = localStorage.getItem(YEAR_KEY) === "2027" ? "2027" : "2026";
 
-      ["2026", "2027"].forEach((y) => {
+      // Build the data map from the persisted year list.
+      store.data = {};
+      yearList.forEach((y) => {
         const raw = localStorage.getItem(LAYOUT_KEY(y));
         if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            store.data[y] = normalizeYear(parsed, y);
-          } catch (_) {
-            store.data[y] = { lanes: [], items: [] };
-          }
+          try { store.data[y] = normalizeYear(JSON.parse(raw), y); }
+          catch (_) { store.data[y] = { lanes: [], items: [] }; }
+        } else {
+          store.data[y] = { lanes: [], items: [] };
         }
       });
+      // Guarantee at least one year exists.
+      if (!Object.keys(store.data).length) store.data = { "2026": { lanes: [], items: [] } };
+
+      // Active year must be one we actually have; else fall back to the first.
+      const storedActive = localStorage.getItem(YEAR_KEY);
+      store.activeYear = (storedActive && store.data[storedActive]) ? storedActive : years()[0];
     } catch (_) {
       // Carry on with defaults
     }
 
     // Backfill missing lane colors
-    ["2026", "2027"].forEach((y) => {
+    years().forEach((y) => {
       (store.data[y].lanes || []).forEach((l, i) => {
         if (!l.color) l.color = PALETTE[i % PALETTE.length];
       });
@@ -250,12 +259,13 @@
         localStorage.setItem(META_KEY, JSON.stringify({
           title: store.title,
           eyebrow: store.eyebrow,
+          years: Object.keys(store.data),
           schema: SCHEMA_VERSION
         }));
         localStorage.setItem(ACCENT_KEY, store.accent);
         localStorage.setItem(THEME_KEY, store.theme);
         localStorage.setItem(YEAR_KEY, store.activeYear);
-        ["2026", "2027"].forEach((y) => {
+        Object.keys(store.data).forEach((y) => {
           localStorage.setItem(LAYOUT_KEY(y), JSON.stringify(store.data[y]));
         });
       } catch (_) { /* storage full or disabled */ }
@@ -335,10 +345,52 @@
     return true;
   }
 
+  // Sorted list of year keys (ascending).
+  function years() {
+    return Object.keys(store.data).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  }
+
   function setActiveYear(year) {
-    if (year !== "2026" && year !== "2027") return;
+    year = String(year);
+    if (!store.data[year]) return;
     if (store.activeYear === year) return;
     commit(() => { store.activeYear = year; });
+  }
+
+  // Append the next consecutive year (max existing + 1) and switch to it.
+  // Seeds the new year with the active year's lane structure (fresh ids, no
+  // items) so it's ready to use with the same swimlanes. Returns the new year.
+  function addYear() {
+    const ints = years().map((y) => parseInt(y, 10)).filter((n) => !isNaN(n));
+    const next = String((ints.length ? Math.max(...ints) : 2025) + 1);
+    if (store.data[next]) { setActiveYear(next); return next; }
+    const src = store.data[store.activeYear];
+    const lanes = (src && Array.isArray(src.lanes) ? src.lanes : []).map((l, i) => ({
+      id: uid("lane"),
+      name: l.name,
+      description: l.description || "",
+      color: l.color || PALETTE[i % PALETTE.length]
+    }));
+    commit(() => {
+      store.data[next] = { granularity: "day", lanes, items: [] };
+      store.activeYear = next;
+    });
+    return next;
+  }
+
+  // Remove a year. Guarded: never removes the last remaining year. If the
+  // removed year was active, falls back to the earliest remaining year.
+  // (Caller is responsible for any "this has items" confirmation.)
+  function removeYear(year) {
+    year = String(year);
+    if (!store.data[year]) return false;
+    if (years().length <= 1) return false;
+    commit(() => {
+      delete store.data[year];
+      if (store.activeYear === year) store.activeYear = years()[0];
+    });
+    try { localStorage.removeItem(LAYOUT_KEY(year)); } catch (_) { /* noop */ }
+    return true;
   }
 
   function setTitle(t) {
@@ -362,17 +414,26 @@
   }
 
   function replaceAll(payload) {
-    // Used by template loader and JSON import
+    // Used by template loader and JSON import. Accepts any set of 4-digit
+    // year keys present in payload.data.
     commit(() => {
       if (payload.title) store.title = String(payload.title).slice(0, 120);
       if (payload.eyebrow) store.eyebrow = String(payload.eyebrow).slice(0, 80);
-      if (payload.activeYear === "2026" || payload.activeYear === "2027") {
-        store.activeYear = payload.activeYear;
-      }
-      if (payload.data) {
-        ["2026", "2027"].forEach((y) => {
-          if (payload.data[y]) store.data[y] = normalizeYear(payload.data[y], y);
+      if (payload.data && typeof payload.data === "object") {
+        const next = {};
+        Object.keys(payload.data).forEach((y) => {
+          if (/^\d{4}$/.test(String(y))) next[y] = normalizeYear(payload.data[y], y);
         });
+        store.data = Object.keys(next).length
+          ? next
+          : { "2026": { lanes: [], items: [] }, "2027": { lanes: [], items: [] } };
+      }
+      // Active year: prefer the payload's if it exists, else keep current if
+      // still valid, else the earliest available.
+      if (payload.activeYear && store.data[String(payload.activeYear)]) {
+        store.activeYear = String(payload.activeYear);
+      } else if (!store.data[store.activeYear]) {
+        store.activeYear = years()[0];
       }
     });
   }
@@ -412,6 +473,9 @@
     currentYear,
     findItem,
     findLane,
+    years,
+    addYear,
+    removeYear,
     setActiveYear,
     setTitle,
     setEyebrow,

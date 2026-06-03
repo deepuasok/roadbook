@@ -81,11 +81,7 @@
     document.getElementById("title").textContent = s.title;
     document.getElementById("eyebrow").textContent = s.eyebrow;
     document.getElementById("axisYear").textContent = s.activeYear;
-    document.querySelectorAll(".year-pill").forEach((p) => {
-      const active = p.dataset.year === s.activeYear;
-      p.classList.toggle("active", active);
-      p.setAttribute("aria-selected", active ? "true" : "false");
-    });
+    renderYearPills();
     document.documentElement.style.setProperty("--accent", s.accent);
     document.body.setAttribute("data-theme", s.theme);
     refreshUndoRedo();
@@ -600,14 +596,85 @@
     if (r) r.disabled = !window.Roadbook.state.canRedo();
   }
 
+  // ---------- Year pills (dynamic) ----------
+  function renderYearPills() {
+    const container = document.getElementById("yearPills");
+    if (!container) return;
+    const s = window.Roadbook.state.get();
+    const list = window.Roadbook.state.years();
+    // Adding/removing years is an edit — hidden for propose-only collaborators.
+    const canEditYears = !document.body.classList.contains("collab-mode");
+    const showRemove = canEditYears && list.length > 1;
+
+    container.innerHTML = "";
+    list.forEach((y) => {
+      const pill = document.createElement("button");
+      pill.className = "year-pill" + (y === s.activeYear ? " active" : "");
+      pill.dataset.year = y;
+      pill.setAttribute("role", "tab");
+      pill.setAttribute("aria-selected", y === s.activeYear ? "true" : "false");
+      const label = document.createElement("span");
+      label.textContent = y;
+      pill.appendChild(label);
+      if (showRemove) {
+        const x = document.createElement("span");
+        x.className = "year-remove";
+        x.textContent = "×";
+        x.setAttribute("role", "button");
+        x.title = "Remove " + y;
+        pill.appendChild(x);
+      }
+      container.appendChild(pill);
+    });
+    if (canEditYears) {
+      const add = document.createElement("button");
+      add.className = "year-pill year-add";
+      add.id = "addYearBtn";
+      add.type = "button";
+      add.title = "Add the next year";
+      add.setAttribute("aria-label", "Add year");
+      add.textContent = "+";
+      container.appendChild(add);
+    }
+  }
+
+  function removeYearWithGuard(year) {
+    const s = window.Roadbook.state.get();
+    const yd = s.data[year];
+    const itemCount = yd && Array.isArray(yd.items) ? yd.items.length : 0;
+    const msg = itemCount > 0
+      ? `Remove ${year}? It has ${itemCount} item${itemCount > 1 ? "s" : ""} that will be deleted.`
+      : `Remove ${year}?`;
+    if (!confirm(msg)) return;
+    const ok = window.Roadbook.state.removeYear(year);
+    if (ok) { fullRender(); window.Roadbook.app.toast(`Removed ${year}`); }
+    else window.Roadbook.app.toast("Can't remove the only year", true);
+  }
+
   // ---------- Wire top controls ----------
   function wireTop() {
-    document.querySelectorAll(".year-pill").forEach((p) => {
-      p.addEventListener("click", () => {
-        window.Roadbook.state.setActiveYear(p.dataset.year);
-        fullRender();
+    const yearPills = document.getElementById("yearPills");
+    if (yearPills) {
+      yearPills.addEventListener("click", (e) => {
+        const removeBtn = e.target.closest(".year-remove");
+        if (removeBtn) {
+          e.stopPropagation();
+          const pill = removeBtn.closest(".year-pill");
+          if (pill && pill.dataset.year) removeYearWithGuard(pill.dataset.year);
+          return;
+        }
+        if (e.target.closest(".year-add")) {
+          window.Roadbook.state.addYear();
+          fullRender();
+          return;
+        }
+        const pill = e.target.closest(".year-pill");
+        if (pill && pill.dataset.year) {
+          window.Roadbook.state.setActiveYear(pill.dataset.year);
+          fullRender();
+        }
       });
-    });
+    }
 
     bindEditable(document.getElementById("title"), (v) => window.Roadbook.state.setTitle(v));
     bindEditable(document.getElementById("eyebrow"), (v) => window.Roadbook.state.setEyebrow(v));
