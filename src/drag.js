@@ -314,11 +314,15 @@
               item.endDate = patch.endDate;
               item.row = patch.row;
               item.laneId = patch.laneId;
+              window.Roadbook.app.compactLaneRows(oldLane);
+              if (drop.laneId !== oldLane) window.Roadbook.app.compactLaneRows(drop.laneId);
             });
           }
         }
         const newCard = window.Roadbook.app.replaceCard(item, oldLane);
         if (newCard) attachCard(newCard);
+        window.Roadbook.app.syncLaneCardRows(oldLane);
+        window.Roadbook.app.syncLaneCardRows(drop.laneId);
         window.Roadbook.app.resizeLaneBody(oldLane);
         window.Roadbook.app.resizeLaneBody(drop.laneId);
       }

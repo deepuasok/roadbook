@@ -1979,11 +1979,15 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
               item.endDate = patch.endDate;
               item.row = patch.row;
               item.laneId = patch.laneId;
+              window.Roadbook.app.compactLaneRows(oldLane);
+              if (drop.laneId !== oldLane) window.Roadbook.app.compactLaneRows(drop.laneId);
             });
           }
         }
         const newCard = window.Roadbook.app.replaceCard(item, oldLane);
         if (newCard) attachCard(newCard);
+        window.Roadbook.app.syncLaneCardRows(oldLane);
+        window.Roadbook.app.syncLaneCardRows(drop.laneId);
         window.Roadbook.app.resizeLaneBody(oldLane);
         window.Roadbook.app.resizeLaneBody(drop.laneId);
       }
@@ -2196,9 +2200,11 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     window.Roadbook.state.commit(() => {
       const y = window.Roadbook.state.currentYear();
       y.items = y.items.filter((i) => i.id !== itemId);
+      window.Roadbook.app.compactLaneRows(laneId);
     });
     const card = document.querySelector(`.card[data-id="${itemId}"]`);
     if (card) card.remove();
+    window.Roadbook.app.syncLaneCardRows(laneId);
     window.Roadbook.app.resizeLaneBody(laneId);
     close();
     window.Roadbook.app.toast("Deleted");
@@ -2877,6 +2883,33 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     body.style.minHeight = ((maxRow + 1) * ROW_H) + "px";
   }
 
+  // Collapse empty rows: renumber the rows actually in use to dense 0..n indices
+  // so a vacated row doesn't leave a white gap. Pure state mutation — the caller
+  // wraps it in commit() and refreshes the DOM. Returns true if anything moved.
+  function compactLaneRows(laneId) {
+    const items = window.Roadbook.state.currentYear().items.filter((i) => i.laneId === laneId);
+    if (!items.length) return false;
+    const usedRows = [...new Set(items.map((i) => i.row))].sort((a, b) => a - b);
+    const remap = new Map(usedRows.map((r, idx) => [r, idx]));
+    let changed = false;
+    items.forEach((i) => {
+      const next = remap.get(i.row);
+      if (next !== i.row) { i.row = next; changed = true; }
+    });
+    return changed;
+  }
+
+  // Push current state rows onto the cards' --row CSS var, for the other cards
+  // in a lane that shifted up when compaction removed a row above them.
+  function syncLaneCardRows(laneId) {
+    const body = document.querySelector(`.lane-body[data-lane="${laneId}"]`);
+    if (!body) return;
+    body.querySelectorAll(".card").forEach((card) => {
+      const item = window.Roadbook.state.findItem(card.dataset.id);
+      if (item) card.style.setProperty("--row", item.row);
+    });
+  }
+
   // ---------- Mutations ----------
   function addItem(laneId) {
     const id = window.Roadbook.state.uid("it");
@@ -3073,13 +3106,17 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
         }
         item.row = row;
         item.laneId = laneId;
+        compactLaneRows(oldLane);
+        if (laneId !== oldLane) compactLaneRows(laneId);
       });
       if (oldLane !== laneId) {
         replaceCard(item, oldLane);
+        syncLaneCardRows(oldLane);
         resizeLaneBody(oldLane);
       } else {
         updateCardDom(item);
       }
+      syncLaneCardRows(laneId);
       resizeLaneBody(laneId);
       const newCard = document.querySelector(`.card[data-id="${id}"]`);
       if (newCard) newCard.focus();
@@ -3253,6 +3290,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     updateCardDom,
     replaceCard,
     resizeLaneBody,
+    compactLaneRows,
+    syncLaneCardRows,
     toast
   };
 

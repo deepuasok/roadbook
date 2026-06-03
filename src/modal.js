@@ -112,9 +112,11 @@
     window.Roadbook.state.commit(() => {
       const y = window.Roadbook.state.currentYear();
       y.items = y.items.filter((i) => i.id !== itemId);
+      window.Roadbook.app.compactLaneRows(laneId);
     });
     const card = document.querySelector(`.card[data-id="${itemId}"]`);
     if (card) card.remove();
+    window.Roadbook.app.syncLaneCardRows(laneId);
     window.Roadbook.app.resizeLaneBody(laneId);
     close();
     window.Roadbook.app.toast("Deleted");
