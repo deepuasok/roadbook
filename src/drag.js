@@ -272,9 +272,14 @@
     const rowCount = others.length ? Math.max(...others.map((i) => i.row)) + 1 : 0;
 
     const yInTarget = cardTopScreen - targetRect.top;
+    // "Insert above" band. A row-0 bar rests at yInTarget≈0, which already sits
+    // inside a top-edge band — so when duplicating (ctrl/cmd-drag) we require a
+    // deliberate upward drag past the lane top (a dead-zone), otherwise dragging
+    // a top-row bar sideways to copy it would keep snapping to insert-above.
     const EDGE = 9; // px band at the very top edge meaning "insert above"
+    const aboveBand = dragState.copy ? -ROW_H * 0.5 : EDGE;
     let row, growMode = "none";
-    if (rowCount > 0 && yInTarget < EDGE) {
+    if (rowCount > 0 && yInTarget < aboveBand) {
       row = -1; growMode = "above";
     } else {
       row = Math.max(0, Math.min(rowCount, Math.floor(yInTarget / ROW_H)));
