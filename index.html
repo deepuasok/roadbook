@@ -567,6 +567,24 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   flex: 1 1 auto; min-width: 0;
   color: var(--text);
 }
+
+/* Hover tooltip — shows a bar's full title (titles truncate to fit the row) */
+.rb-tooltip {
+  position: fixed;
+  z-index: 50;
+  max-width: 280px;
+  padding: 6px 9px;
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 6px;
+  font-size: 12px; line-height: 1.35;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+.rb-tooltip[hidden] { display: none; }
+.rb-tooltip-title { font-weight: 600; white-space: normal; }
+.rb-tooltip-sub { opacity: 0.7; font-size: 11px; white-space: nowrap; }
 .card .meta {
   flex: 0 0 auto;
   font-size: 10px; font-weight: 500;
@@ -2758,6 +2776,64 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
+  // ---------- Hover tooltip ----------
+  // Bars truncate their title to fit the timeline, so a small hover bubble shows
+  // the full title plus the date range and status. One shared element, delegated
+  // listeners, a short delay so it doesn't flicker while sweeping across bars.
+  let tipEl = null, tipTimer = null;
+  function ensureTip() {
+    if (tipEl) return tipEl;
+    tipEl = document.createElement("div");
+    tipEl.className = "rb-tooltip";
+    tipEl.hidden = true;
+    document.body.appendChild(tipEl);
+    return tipEl;
+  }
+  function showTip(card) {
+    const item = window.Roadbook.state.findItem(card.dataset.id);
+    if (!item) return;
+    const tip = ensureTip();
+    const range = item.startDate
+      ? (item.endDate && item.endDate !== item.startDate
+          ? `${fmtDate(item.startDate)} – ${fmtDate(item.endDate)}`
+          : fmtDate(item.startDate))
+      : "";
+    const status = item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : "";
+    const sub = [range, status].filter(Boolean).join("  ·  ");
+    tip.innerHTML = `<span class="rb-tooltip-title"></span>${sub ? `<span class="rb-tooltip-sub"></span>` : ""}`;
+    tip.querySelector(".rb-tooltip-title").textContent = item.title || "Untitled";
+    if (sub) tip.querySelector(".rb-tooltip-sub").textContent = sub;
+    tip.hidden = false;
+    const r = card.getBoundingClientRect();
+    const tr = tip.getBoundingClientRect();
+    let left = r.left + r.width / 2 - tr.width / 2;
+    left = Math.max(8, Math.min(window.innerWidth - tr.width - 8, left));
+    let top = r.top - tr.height - 8;
+    if (top < 8) top = r.bottom + 8; // flip below the bar if there's no room above
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+  function hideTip() {
+    clearTimeout(tipTimer);
+    if (tipEl) tipEl.hidden = true;
+  }
+  function bindTooltips() {
+    document.addEventListener("mouseover", (e) => {
+      const card = e.target.closest && e.target.closest(".card");
+      if (!card || card.classList.contains("dragging")) return;
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(() => showTip(card), 120);
+    });
+    document.addEventListener("mouseout", (e) => {
+      const card = e.target.closest && e.target.closest(".card");
+      if (!card) return;
+      if (e.relatedTarget && card.contains(e.relatedTarget)) return; // still inside the bar
+      hideTip();
+    });
+    document.addEventListener("pointerdown", hideTip); // never linger into a drag
+    window.addEventListener("scroll", hideTip, true);
+  }
+
   // ---------- Render ----------
   function fullRender() {
     const s = window.Roadbook.state.get();
@@ -3265,6 +3341,8 @@ window.ROADBOOK_TEMPLATES = {"blank":{"roadbookVersion":3,"title":"Roadbook","ey
     document.getElementById("shareLink").addEventListener("click", () => { closeShareMenu(); window.Roadbook.share.copyShareLink(); });
     document.getElementById("sharePng").addEventListener("click", () => { closeShareMenu(); window.Roadbook.share.copyPng(); });
     document.getElementById("shareSvg").addEventListener("click", () => { closeShareMenu(); window.Roadbook.share.downloadSvg(); });
+
+    bindTooltips();
 
     const accentInput = document.getElementById("accentInput");
     document.getElementById("accentBtn").addEventListener("click", () => accentInput.click());
