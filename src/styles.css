@@ -435,6 +435,15 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   background-color: var(--accent-soft);
 }
 
+/* Grow preview — a one-row drop gutter opens at the edge you're dragging toward.
+   The inset accent line marks where the new row lands; for an above-insert the
+   existing cards slide down a row so the top gutter reads as the new slot. */
+.lane-body.grow-below { box-shadow: inset 0 -3px 0 -1px var(--accent); }
+.lane-body.grow-above { box-shadow: inset 0 3px 0 -1px var(--accent); }
+.lane-body.grow-above .card:not(.dragging) {
+  transform: translateY(var(--row-h));
+}
+
 .lane-body::before {
   content: "";
   position: absolute; inset: 0;

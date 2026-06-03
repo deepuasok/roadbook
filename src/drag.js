@@ -255,13 +255,32 @@
     const newStartDate = dates.addDaysIso(yearStart, newStartDay);
     const newEndDate = dates.addDaysIso(newStartDate, spanDays - 1);
 
-    // Row from card top in target body (mirrors how X uses the card's left edge)
-    const yInTarget = cardTopScreen - targetRect.top;
-    const row = Math.max(0, Math.floor(yInTarget / ROW_H));
+    // Row from card top in target body (mirrors how X uses the card's left edge).
+    // Two edge bands let you GROW the lane instead of only landing on existing
+    // rows: dropping near the top edge inserts a new row above everything
+    // (row -1 → compaction renumbers it to 0 and pushes the rest down), and
+    // dropping at/below the last row appends a new bottom row (row = rowCount).
+    // Anything between shares an existing row, as before. setGrowPreview opens a
+    // one-row drop gutter so the new slot is visible and reachable mid-drag.
+    const tgtLaneId = targetBody.dataset.lane;
+    const others = window.Roadbook.state.currentYear().items
+      .filter((i) => i.laneId === tgtLaneId && i.id !== dragState.id);
+    const rowCount = others.length ? Math.max(...others.map((i) => i.row)) + 1 : 0;
 
-    showGhostByDays(targetBody, newStartDay + 1, newStartDay + spanDays, row);
+    const yInTarget = cardTopScreen - targetRect.top;
+    const EDGE = 9; // px band at the very top edge meaning "insert above"
+    let row, growMode = "none";
+    if (rowCount > 0 && yInTarget < EDGE) {
+      row = -1; growMode = "above";
+    } else {
+      row = Math.max(0, Math.min(rowCount, Math.floor(yInTarget / ROW_H)));
+      if (row >= rowCount) growMode = "below";
+    }
+    setGrowPreview(targetBody, rowCount, growMode);
+
+    showGhostByDays(targetBody, newStartDay + 1, newStartDay + spanDays, row < 0 ? 0 : row);
     dragState.dropTarget = {
-      laneId: targetBody.dataset.lane,
+      laneId: tgtLaneId,
       startDate: newStartDate,
       endDate: newEndDate,
       row
@@ -283,6 +302,7 @@
     card.style.transform = "";
     card.classList.remove("dragging");
     hideGhosts();
+    clearGrowPreview();
     clearTargetLane();
 
     if (!dragging) {
@@ -398,6 +418,30 @@
   function clearTargetLane() {
     if (currentTargetLane) currentTargetLane.classList.remove("lane-target");
     currentTargetLane = null;
+  }
+
+  // ----- Grow preview: opens a one-row drop gutter at the top or bottom edge of
+  // the hovered lane so a new row is visible and droppable while dragging.
+  let growState = null; // { body, mode }
+  function setGrowPreview(body, rowCount, mode) {
+    if (growState && growState.body !== body) clearGrowPreview();
+    if (mode === "none") { clearGrowPreview(); return; }
+    body.style.transition = "none"; // snap the gutter open during drag, no lag
+    body.classList.toggle("grow-above", mode === "above");
+    body.classList.toggle("grow-below", mode === "below");
+    body.style.minHeight = ((rowCount + 1) * ROW_H) + "px"; // room for the new slot
+    growState = { body, mode };
+  }
+  function clearGrowPreview() {
+    if (!growState) return;
+    const body = growState.body;
+    body.classList.remove("grow-above", "grow-below");
+    body.style.transition = "";
+    growState = null;
+    // Restore the natural height (animates closed); a commit re-resizes anyway.
+    if (window.Roadbook.app && window.Roadbook.app.resizeLaneBody) {
+      window.Roadbook.app.resizeLaneBody(body.dataset.lane);
+    }
   }
 
   // showGhostByDays — startDay/endDay are 1-based day-of-year inclusive
