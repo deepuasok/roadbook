@@ -1,55 +1,61 @@
-// share.js — PNG (html2canvas), SVG (native), JSON import/export, URL-hash share
+// share.js — PNG (SVG-rasterized), SVG (native), JSON import/export, URL-hash share
 (function () {
-  const HTML2CANVAS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-  let html2canvasLoading = null;
-
-  function ensureHtml2Canvas() {
-    if (typeof window.html2canvas !== "undefined") return Promise.resolve(window.html2canvas);
-    if (html2canvasLoading) return html2canvasLoading;
-    html2canvasLoading = new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = HTML2CANVAS_CDN;
-      s.onload = () => resolve(window.html2canvas);
-      s.onerror = () => reject(new Error("Failed to load html2canvas (offline?)"));
-      document.head.appendChild(s);
-    });
-    return html2canvasLoading;
-  }
-
   // ---------- PNG ----------
+  // Rasterize the clean buildSvg() output to PNG. This replaced an html2canvas
+  // screen-scrape that mangled the lane-body gradient grid into broad gray bands
+  // (html2canvas can't render multi-stop linear-gradients on ::before). The SVG
+  // renderer is deterministic and works offline — no CDN dependency.
   async function copyPng() {
-    let h2c;
+    let blob;
     try {
-      h2c = await ensureHtml2Canvas();
-    } catch (e) {
-      window.Roadbook.app.toast("PNG needs network for html2canvas — try SVG", true);
-      return;
-    }
-    const page = document.getElementById("page");
-    try {
-      const canvas = await h2c(page, {
-        backgroundColor: getComputedStyle(document.body).getPropertyValue("--bg") || "#FFFFFF",
-        scale: 2,
-        useCORS: true,
-        logging: false
-      });
-      canvas.toBlob(async (blob) => {
-        try {
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          window.Roadbook.app.toast("PNG copied to clipboard");
-        } catch (_) {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${slug(window.Roadbook.state.get().title)}.png`;
-          a.click();
-          URL.revokeObjectURL(url);
-          window.Roadbook.app.toast("Clipboard blocked — downloaded PNG instead");
-        }
-      }, "image/png");
+      blob = await svgToPngBlob(2);
     } catch (e) {
       window.Roadbook.app.toast(`PNG failed: ${e.message || e}`, true);
+      return;
     }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      window.Roadbook.app.toast("PNG copied to clipboard");
+    } catch (_) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${slug(window.Roadbook.state.get().title)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      window.Roadbook.app.toast("Clipboard blocked — downloaded PNG instead");
+    }
+  }
+
+  // Render the SVG string into a PNG blob at the given pixel-density scale.
+  function svgToPngBlob(scale) {
+    return new Promise((resolve, reject) => {
+      const svg = buildSvg();
+      const vb = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+      const W = vb ? parseFloat(vb[1]) : 1280;
+      const H = vb ? parseFloat(vb[2]) : 720;
+      const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#FFFFFF";
+      const svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(W * scale);
+          canvas.height = Math.round(H * scale);
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = bg;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          URL.revokeObjectURL(svgUrl);
+          canvas.toBlob((b) => b ? resolve(b) : reject(new Error("canvas toBlob returned null")), "image/png");
+        } catch (err) {
+          URL.revokeObjectURL(svgUrl);
+          reject(err);
+        }
+      };
+      img.onerror = () => { URL.revokeObjectURL(svgUrl); reject(new Error("SVG could not be rendered")); };
+      img.src = svgUrl;
+    });
   }
 
   // ---------- SVG ----------
@@ -106,7 +112,7 @@
     const H = HEADER_H + 24 + totalLaneH + 48;
 
     const out = [];
-    out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="-apple-system, system-ui, sans-serif">`);
+    out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="-apple-system, system-ui, sans-serif">`);
     out.push(`<rect width="${W}" height="${H}" fill="${bg}"/>`);
 
     // Header
