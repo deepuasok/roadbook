@@ -699,6 +699,13 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   background-color: var(--modal-overlay);
   display: none; align-items: center; justify-content: center;
   z-index: 100;
+  /* Scroll the overlay (not just the modal) and pad the edges so a modal
+     taller than a short window can be reached top-to-bottom instead of being
+     clipped. The modal uses margin:auto (below) rather than align-items:center
+     so it stays centered when it fits but pins to the top — not mid-clip —
+     when it overflows. */
+  overflow-y: auto;
+  padding: 24px 16px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   animation: roadbook-overlay-fade 120ms ease;
@@ -712,6 +719,9 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
   background-color: var(--modal-bg);
   color: var(--text);
   border-radius: 14px;
+  /* margin:auto centers within the flex overlay when it fits, and avoids the
+     align-items:center top-clip when the modal is taller than the viewport. */
+  margin: auto;
   width: 400px; max-width: calc(100vw - 32px);
   box-shadow:
     0 12px 32px rgba(0, 0, 0, 0.14),
@@ -758,7 +768,11 @@ h1:hover, h1:focus-visible { background-color: var(--bg-grid); }
    overflow-y here clips to the rounded border. Title + actions stay pinned
    via sticky so Save/Cancel are always reachable as the body grows. */
 .modal-edit {
-  max-height: 88vh;
+  /* Cap to the padded overlay area (overlay has 24px top+bottom padding) so
+     the modal never exceeds the window; content scrolls inside. dvh variant
+     handles mobile browser chrome where supported. */
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   overflow-y: auto;
   padding-bottom: 0;
 }
