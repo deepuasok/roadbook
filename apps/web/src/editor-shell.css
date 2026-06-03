@@ -86,13 +86,24 @@
   background-size: cover; background-position: center;
 }
 
-/* ----- Live presence stack (who's here now) ----- */
+/* ----- Live presence (editors here now) ----- */
+.editor-shell .presence-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.editor-shell .presence-wrap.solo { display: none; }
+.editor-shell .presence-count {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .editor-shell .presence-stack {
   display: inline-flex;
   align-items: center;
   padding-left: 8px; /* offset first avatar's negative margin */
 }
-.editor-shell .presence-stack.solo { display: none; }
 .editor-shell .presence-avatar {
   width: 26px; height: 26px;
   border-radius: 50%;

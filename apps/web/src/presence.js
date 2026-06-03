@@ -28,8 +28,17 @@
   if (!window.RoadbookCollab || !window.RoadbookAuth) return;
 
   const { roadmapId, currentUser } = window.RoadbookCollab;
+  // Editors only (owner + 'editor' collaborators). Proposers neither broadcast
+  // their presence nor see the stack — they get a read-only/propose view.
+  const canEdit = window.RoadbookCollab.canEdit != null
+    ? window.RoadbookCollab.canEdit
+    : window.RoadbookCollab.isOwner;
+  if (!canEdit) return;
+
   const sb = window.RoadbookAuth.getClient && window.RoadbookAuth.getClient();
   const stack = document.getElementById("presenceStack");
+  const wrap = document.getElementById("presenceWrap");
+  const countEl = document.getElementById("presenceCount");
   if (!sb || !roadmapId || !currentUser || !stack) return;
 
   const me = {
@@ -78,8 +87,10 @@
       more.title = people.length - MAX_SHOWN + " more here";
       stack.appendChild(more);
     }
-    // Hide the stack when you're the only one here.
-    stack.classList.toggle("solo", people.length <= 1);
+    // "N viewing" count label.
+    if (countEl) countEl.textContent = people.length + " viewing";
+    // Hide the whole presence widget when you're the only editor here.
+    if (wrap) wrap.classList.toggle("solo", people.length <= 1);
   }
 
   const channel = sb.channel("presence:roadmap:" + roadmapId, {
