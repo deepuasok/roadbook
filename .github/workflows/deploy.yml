@@ -22,14 +22,42 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Build
+
+      # The single-file offline build — still the fork-and-download artifact.
+      - name: Build single-file engine
         run: node tools/build.mjs
+
+      # The hosted app, built in local mode: no Supabase, roadmaps in
+      # localStorage. This is what the demo serves, so the public demo shows
+      # the same UI as the production app instead of the bare engine.
+      # Pages serves this repo from /<repo>/, so the build needs a base path.
+      - name: Build hosted app (demo, local mode)
+        run: node tools/build.mjs
+        working-directory: apps/web
+        env:
+          ROADBOOK_BASE: /${{ github.event.repository.name }}/
+          ROADBOOK_DEMO: "1"
+
+      # Hard stop if credentials ever reach the public demo build.
+      - name: Verify demo ships no Supabase credentials
+        run: |
+          if ! grep -q 'SUPABASE_URL: ""' apps/web/dist/config.js \
+             || ! grep -q 'SUPABASE_ANON_KEY: ""' apps/web/dist/config.js; then
+            echo "::error::Demo build contains Supabase config — refusing to publish."
+            cat apps/web/dist/config.js
+            exit 1
+          fi
+          echo "OK — demo is in local mode."
+
       - name: Stage site
         run: |
           mkdir -p _site
-          cp index.html _site/
+          cp -r apps/web/dist/. _site/
+          rm -f _site/.gitignore
+          cp index.html _site/single.html
           cp -r templates _site/
           cp -r docs _site/ || true
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

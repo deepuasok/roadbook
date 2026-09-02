@@ -12,9 +12,21 @@ Most roadmap tools are either Miro plugins (overkill) or enterprise software (Ah
 
 Built for the case where the PM just needs a clean swim-lane roadmap they can edit fast and drop into a deck.
 
+## Two builds, one engine
+
+The roadmap engine lives in `src/` and is shared by both builds:
+
+1. **Single-file** (`src/` → `index.html`) — offline, no backend, no accounts. Roadmaps live in localStorage. This is the fork-and-download artifact.
+
+2. **Hosted** (`apps/web/`) — the same engine wrapped in Supabase auth, cloud sync, share links, comments and live presence. This is what runs in production.
+
+The hosted build has a local mode: with no Supabase credentials configured it stubs auth and falls back to localStorage, so it runs as a pure static site. That mode is what the live demo publishes, which is why the demo shows the real app UI rather than the bare engine.
+
 ## Quick start
 
-**Use it (no install):** open the [live demo](https://deepuasok.github.io/roadbook/) or download `index.html` and double-click.
+**Try it (no install):** open the [live demo](https://deepuasok.github.io/roadbook/). It runs the full hosted app with sign-in stubbed out, so roadmaps save to your browser's localStorage and nothing leaves the page.
+
+**Use it offline:** download [`single.html`](https://deepuasok.github.io/roadbook/single.html) (or `index.html` from this repo) and double-click. One file, no server.
 
 **Fork and host:**
 ```bash

@@ -17,6 +17,20 @@ const ENGINE_SRC = join(REPO, "src");
 const TEMPLATES = join(REPO, "templates");
 const DIST = join(WEB, "dist");
 
+// Optional base path, for hosting under a subdirectory (GitHub Pages serves
+// this repo at /roadbook/). Empty by default, so the Vercel build keeps its
+// root-absolute paths and its output is unchanged.
+const BASE = normalizeBase(process.env.ROADBOOK_BASE || "");
+function normalizeBase(b) {
+  const s = String(b || "").trim();
+  if (!s || s === "/") return "";
+  return "/" + s.replace(/^\/+/, "").replace(/\/+$/, "") + "/";
+}
+
+// Demo build: force local mode (no Supabase). Guarantees the public demo can
+// never ship credentials, even if env vars are present in the build runner.
+const DEMO = process.env.ROADBOOK_DEMO === "1";
+
 const JS_ORDER = ["state.js", "drag.js", "modal.js", "share.js", "templates.js", "defaults.js", "app.js"];
 
 function read(p) { return readFileSync(p, "utf8"); }
@@ -110,6 +124,11 @@ if (existsSync(LOCAL_CONFIG)) {
 if (!SUPABASE_URL) SUPABASE_URL = process.env.SUPABASE_URL || process.env.PUBLIC_SUPABASE_URL || "";
 if (!SUPABASE_ANON_KEY) SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.PUBLIC_SUPABASE_ANON_KEY || "";
 if (configSource === "EMPTY" && SUPABASE_URL && SUPABASE_ANON_KEY) configSource = "env vars";
+if (DEMO) {
+  SUPABASE_URL = "";
+  SUPABASE_ANON_KEY = "";
+  configSource = "DEMO — local mode, no Supabase";
+}
 const configJs = `window.ROADBOOK_CONFIG = {
   SUPABASE_URL: ${JSON.stringify(SUPABASE_URL)},
   SUPABASE_ANON_KEY: ${JSON.stringify(SUPABASE_ANON_KEY)}
@@ -131,10 +150,40 @@ function rewireScripts(file) {
 rewireScripts("index.html");
 rewireScripts("app.html");
 
+// Rewrite root-absolute references so the app works under a base path. The
+// dist/ files are flat siblings, so only these routes ever appear as "/x".
+const BASE_ROUTES = [
+  "app.html", "editor.html", "index.html", "config.js",
+  "supabase-client.js", "roadmaps-api.js", "templates.js",
+  "engine.js", "engine.css"
+];
+
+function applyBase(code) {
+  let out = code;
+  for (const r of BASE_ROUTES) {
+    for (const q of ['"', "'", "`"]) {
+      out = out.split(q + "/" + r).join(q + BASE + r);
+    }
+  }
+  // OAuth redirect target, built from location.origin.
+  out = out.split("${location.origin}/app.html").join("${location.origin}" + BASE + "app.html");
+  // Bare root redirects (sign-out, requireAuth bounce).
+  out = out.split('location.href = "/"').join('location.href = "' + BASE + '"');
+  return out;
+}
+
+if (BASE) {
+  for (const f of ["index.html", "app.html", "editor.html", "supabase-client.js", "roadmaps-api.js"]) {
+    const p = join(DIST, f);
+    writeFileSync(p, applyBase(read(p)));
+  }
+}
+
 console.log(`Built apps/web/dist/`);
 console.log(`  index.html      (landing)`);
 console.log(`  app.html        (dashboard)`);
 console.log(`  editor.html     (cloud editor)`);
 console.log(`  engine.css/.js  (OSS engine reused)`);
 console.log(`  templates.js    (${Object.keys(templates).length} templates)`);
+if (BASE) console.log(`  base path       ${BASE}`);
 console.log(`  config.js       (${configSource === "EMPTY" ? "EMPTY — set SUPABASE_URL/SUPABASE_ANON_KEY or create apps/web/config.js" : "from " + configSource})`);

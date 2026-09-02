@@ -75,6 +75,17 @@ npm run dev
 
 For Google sign-in to work on `http://localhost:5174`, the Vercel-domain steps above (adding the origin in Google Cloud) need to include `http://localhost:5174` as well.
 
+## Build options
+
+`tools/build.mjs` reads two optional environment variables:
+
+| Variable | Effect |
+|---|---|
+| `ROADBOOK_BASE` | Serve under a subdirectory. `ROADBOOK_BASE=/roadbook/` rewrites root-absolute links (`/app.html`, `/editor.html`, script `src`s) to sit under that prefix. Unset means root-absolute, which is what Vercel uses. |
+| `ROADBOOK_DEMO` | Set to `1` to force local mode: Supabase config is written empty even if credentials are present in the environment, so auth is stubbed and roadmaps fall back to localStorage. |
+
+The GitHub Pages demo is built with both set, which is how the public demo runs the real app UI with no backend.
+
 ## File layout
 
 ```
